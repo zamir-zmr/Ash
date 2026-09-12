@@ -6,8 +6,7 @@
 <title>Restaurant AI Assistant</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
 <style>
   :root{
     --bg:#0E1116;
@@ -678,7 +677,7 @@
     <span>Recent chats</span>
     <span class="sync-badge" id="sync-badge">
       <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"></circle></svg>
-      Synced
+      Saved
     </span>
   </div>
   <div id="history-list"></div>
@@ -745,25 +744,9 @@
 </div>
 
 <script>
-  /* ---------------- Firebase setup ---------------- */
-  const firebaseConfig = {
-    apiKey: "AIzaSyA0rirztMO13FyXcKYz1aEB1ERYH-HQUbA",
-    authDomain: "sweethouse-e3e49.firebaseapp.com",
-    databaseURL: "https://sweethouse-e3e49-default-rtdb.firebaseio.com",
-    projectId: "sweethouse-e3e49",
-    storageBucket: "sweethouse-e3e49.firebasestorage.app",
-    messagingSenderId: "579322038108",
-    appId: "1:579322038108:web:166b7fdb103080f56d6399"
-  };
-
-  firebase.initializeApp(firebaseConfig);
-  const db = firebase.database();
-  const sessionsRef = db.ref('geminiChatApp/sessions');
-
   /* ---------------- Config ---------------- */
-  // NOTE: API_KEY, MODEL aur direct Gemini URL yahan se hata diye gaye hain.
-  // Ab request hamare apne backend endpoint par jaati hai; key sirf server (Vercel env var) par rehti hai.
   const STREAM_URL = '/api/gemini';
+  const STORAGE_KEY = 'restaurant_chat_sessions';
   const WELCOME_TEXT = 'Welcome! 🍽️ I\'m your Restaurant Assistant. Ask me about our menu, prices, timings, or anything about our restaurant!';
 
   /* ---------------- Elements ---------------- */
@@ -828,49 +811,36 @@
   let pendingAttachments = [];
   let editingIndex = null;
   let soundOn = true;
-  let firebaseReady = false;
   const responseCache = new Map();
 
-  /* ---------------- Firebase realtime sync ---------------- */
-  db.ref('.info/connected').on('value', (snap) => {
-    if (snap.val() === true) {
-      statusDot.classList.remove('offline');
-      statusText.textContent = 'Online';
-      syncBadge.style.color = '#57D68D';
-    } else {
-      statusDot.classList.add('offline');
-      statusText.textContent = 'Offline';
-      syncBadge.style.color = '#FF6E6E';
-    }
-  });
+  /* ---------------- localStorage helpers ---------------- */
+  function loadFromStorage() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (_) { return []; }
+  }
 
-  sessionsRef.on('value', (snapshot) => {
-    const data = snapshot.val() || {};
-    sessions = Object.keys(data)
-      .map(id => ({ id, ...data[id] }))
-      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  function saveToStorage() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+    } catch (_) {}
+  }
 
-    if (!firebaseReady) {
-      firebaseReady = true;
-      if (sessions.length === 0) {
-        createSession();
-      } else {
-        currentSessionId = sessions[0].id;
-        renderCurrentSession();
-      }
+  /* ---------------- Init from localStorage ---------------- */
+  (function init() {
+    sessions = loadFromStorage().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    // Show as online (local, always available)
+    statusDot.classList.remove('offline');
+    statusText.textContent = 'Online';
+    if (sessions.length === 0) {
+      createSession();
     } else {
-      // Live update from this device or a friend using the same app
-      if (currentSessionId && !sessions.find(s => s.id === currentSessionId)) {
-        currentSessionId = sessions.length > 0 ? sessions[0].id : null;
-        if (!currentSessionId) createSession();
-        renderCurrentSession();
-      } else if (currentSessionId && !isSending) {
-        // Refresh the open chat if it changed elsewhere (e.g. a friend's device)
-        renderCurrentSession();
-      }
+      currentSessionId = sessions[0].id;
+      renderCurrentSession();
     }
     renderHistoryList();
-  });
+  })();
 
   function getCurrentSession() {
     return sessions.find(s => s.id === currentSessionId);
@@ -878,14 +848,18 @@
 
   function saveSession(session) {
     session.updatedAt = Date.now();
-    sessionsRef.child(session.id).set(session);
+    const idx = sessions.findIndex(s => s.id === session.id);
+    if (idx >= 0) sessions[idx] = session; else sessions.unshift(session);
+    sessions.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    saveToStorage();
   }
 
   /* ---------------- Session management ---------------- */
   function createSession() {
     const session = { id: 'c' + Date.now(), title: 'New chat', updatedAt: Date.now(), messages: [] };
+    sessions.unshift(session);
     currentSessionId = session.id;
-    sessionsRef.child(session.id).set(session);
+    saveToStorage();
     renderCurrentSession();
     closeSidebarOnMobile();
   }
@@ -903,15 +877,16 @@
 
   function deleteSession(id, evt) {
     evt.stopPropagation();
-    sessionsRef.child(id).remove();
+    sessions = sessions.filter(s => s.id !== id);
+    saveToStorage();
     if (currentSessionId === id) {
-      const remaining = sessions.filter(s => s.id !== id);
-      if (remaining.length > 0) {
-        loadSession(remaining[0].id);
+      if (sessions.length > 0) {
+        loadSession(sessions[0].id);
       } else {
         createSession();
       }
     }
+    renderHistoryList();
   }
 
   function renderHistoryList() {
@@ -1521,7 +1496,7 @@
     // Permanent guard against 413 Payload Too Large: never resend more
     // than the last MAX_HISTORY_MESSAGES turns as context, no matter how
     // long the saved chat history grows. Full history stays saved in
-    // Firebase for the user to scroll back through; only what we SEND to
+    // localStorage for the user to scroll back through; only what we SEND to
     // Gemini is capped.
     const MAX_HISTORY_MESSAGES = 20;
     const messages = allMessages.slice(-MAX_HISTORY_MESSAGES);
