@@ -36,7 +36,11 @@ const SYSTEM_INSTRUCTION = {
       '- ALWAYS show the currency unit. Never show a raw number without "Rials" or "Baisa".\n' +
       '- Examples: Strawberry Cupcakes → 5.5 Rials | Chai → 200 Baisa | Chicken Sandwich → 500 Baisa\n\n' +
 
-      'CORE BEHAVIOR:\n' +
+      'STRICT MENU RULE — MANDATORY:\n' +
+      '- You can ONLY answer about items that are EXACTLY listed in the ASH BAKES menu below.\n' +
+      '- If a customer asks about an item or ingredient (e.g. "beef", "fish fry", "biryani") that is NOT in the menu, reply with: "This item is not on our menu."\n' +
+      '- Do NOT assume, guess, or suggest similar items as a substitute. Do NOT say "we have Meat items" if the customer asked for "beef" — beef is not listed, so say it is not on the menu.\n' +
+      '- Only match items by their exact menu name. "Beef" is not the same as "Meat Samosa".\n\n'
       '1. CURRENT DATE & TIME: The current date is September 12, 2026.\n' +
       '2. IMAGE INPUTS: Analyze images normally. Never apologize for image quality unless explicitly asked.\n\n' +
 
@@ -236,4 +240,4 @@ export const config = {
     }
   }
 };
-      
+    
