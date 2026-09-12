@@ -225,3 +225,122 @@ export const config = {
     }
   }
 };
+      '- Chocolate Pecan Tart — 9\n\n' +
+
+      '🍨 DESSERT CUPS\n' +
+      '- Saffron Milk Cake Cups — 17.5\n' +
+      '- Mohalabiya Cups — 12\n' +
+      '- Mango Passion Cups — 21\n' +
+      '- Japanese Cheesecake Cups — 14.5\n\n' +
+
+      '🥙 SNACKS\n' +
+      '- Chicken Cutlet — 0.15\n' +
+      '- Kachori — 0.10\n' +
+      '- Meat Chops — 0.25\n' +
+      '- Musakhan — 0.20\n' +
+      '- Fish Cutlet — 0.15\n' +
+      '- Pizza — 0.20\n' +
+      '- Chicken Samosa — 0.20\n' +
+      '- Meat Musakhar — 0.30\n' +
+      '- Chicken Musakhar — 0.40\n' +
+      '- Vegetable Spring Roll — 0.20\n' +
+      '- Chicken Spring Roll — 0.20\n' +
+      '- Meat Samosa — 0.20\n' +
+      '- Chapati — 0.30\n' +
+      '- B Tum Goa — 0.15\n' +
+      '- Cheese Roll — 0.15\n' +
+      '- Sausage Roll — 0.15\n' +
+      '- Chicken Puff Pastry — 0.20\n' +
+      '- Mandazi — 0.15\n' +
+      '- Chicken Cone — 0.20\n\n' +
+
+      '🥤 DRINKS\n' +
+      '- Passion Drink — 0.20\n' +
+      '- Passion Juice — 0.10\n' +
+      '- Water — 0.10\n\n' +
+
+      '🥪 SANDWICHES\n' +
+      '- Chicken Sandwich — 0.50\n' +
+      '- Egg Sandwich — 0.50\n' +
+      '- Tuna Sandwich — 0.50\n\n' +
+
+      '🫙 SAUCES & CONDIMENTS\n' +
+      '- Chutney — 0.10\n' +
+      '- Tamarind Sauce — 1.8\n' +
+      '- Mango Achar — 3\n' +
+      '- Lemon Achar — 3\n\n' +
+
+      '☕ TEA & BAKERY\n' +
+      '- Chai — 0.20\n' +
+      '- Rusk Toast — 0.10\n\n' +
+
+      'When listing menu items, always show the price alongside. If a customer asks "what is cheapest" or "most expensive" you can calculate from the above data. Currency is as listed (no currency symbol required unless customer asks).'
+  }]
+};
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: { message: 'Method not allowed' } });
+    return;
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    res.status(500).json({ error: { message: 'Server misconfigured: GEMINI_API_KEY missing' } });
+    return;
+  }
+
+  const { contents } = req.body || {};
+  if (!contents) {
+    res.status(400).json({ error: { message: 'Missing "contents" in request body' } });
+    return;
+  }
+
+  const upstreamUrl = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:streamGenerateContent?alt=sse&key=${apiKey}`;
+
+  let upstreamResponse;
+  try {
+    upstreamResponse = await fetch(upstreamUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents, systemInstruction: SYSTEM_INSTRUCTION })
+    });
+  } catch (err) {
+    res.status(502).json({ error: { message: 'Failed to reach Gemini API', detail: err.message } });
+    return;
+  }
+
+  if (!upstreamResponse.ok || !upstreamResponse.body) {
+    let detail = null;
+    try { detail = await upstreamResponse.json(); } catch (_) {}
+    res.status(upstreamResponse.status).json({
+      error: { message: detail?.error?.message || `Gemini API error: ${upstreamResponse.status}` }
+    });
+    return;
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+
+  const reader = upstreamResponse.body.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      res.write(value);
+    }
+  } catch (err) {
+    // Stream error handled silently
+  } finally {
+    res.end();
+  }
+}
+
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '8mb'
+    }
+  }
+};
