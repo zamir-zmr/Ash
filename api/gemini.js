@@ -3,7 +3,7 @@
 // API key kabhi bhi frontend ko nahi bheji jaati; yeh sirf server par
 // process.env.GEMINI_API_KEY se uthayi jaati hai.
 
-const MODEL = 'gemini-flash-lite-latest';
+const MODEL = 'gemini-2.0-flash';
 
 const SYSTEM_INSTRUCTION = {
   parts: [{
@@ -21,10 +21,12 @@ const SYSTEM_INSTRUCTION = {
       '5. NEVER MIX scripts in a single response unless the user themselves mixed them.\n\n' +
 
       'TONE & STYLE:\n' +
-      '- Be direct and concise. When asked for a price, state ONLY the item name and price. No filler phrases.\n' +
+      '- Be direct, concise and professional.\n' +
+      '- When asked for a price, state ONLY the item name and price. No filler phrases.\n' +
       '- NEVER use the word "available" in any response.\n' +
       '- No phrases like "Great choice!", "Sure!", "Of course!", or any unnecessary conversation.\n' +
-      '- Use food emojis occasionally 🍰🧁🍪.\n\n' +
+      '- Do NOT respond to greetings or acknowledgements (like "Ok", "Thanks", "Okay") with only emojis. Always give a short, helpful professional text response such as "Let me know if you need anything else from our menu."\n' +
+      '- Use emojis SPARINGLY — at most one per response, only when it genuinely adds value. Never send a response that is only emojis.\n\n' +
 
       'CURRENCY RULES — MANDATORY:\n' +
       '- All prices in the menu are in Omani currency.\n' +
@@ -233,4 +235,3 @@ export const config = {
     }
   }
 };
-    
