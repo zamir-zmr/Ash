@@ -53,11 +53,9 @@ const SYSTEM_INSTRUCTION = {
       '1. DEFAULT: Always respond in English.\n' +
       '2. ARABIC: If user writes in Arabic, respond fully in Arabic.\n' +
       '3. HINDI/HINGLISH: If user writes in Hindi or Hinglish, respond in same style.\n' +
-      '4. Mirror the user language instantly. Switch if they switch.\n\n' +
-      '1. DEFAULT: Always respond in English.\n' +
-      '2. ARABIC: If user writes in Arabic, respond fully in Arabic.\n' +
-      '3. HINDI/HINGLISH: If user writes in Hindi or Hinglish, respond in same style.\n' +
-      '4. Mirror the user language instantly. Switch if they switch.\n\n' +
+      '4. Mirror the user language instantly. Switch if they switch.\n' +
+      '5. NEVER switch to Arabic (or any other language) unless the user\'s CURRENT message is itself clearly written in that language\'s script. A greeting, a warm tone, or an unclear/garbled transliteration is NOT a signal to switch languages — when in doubt, default to English.\n' +
+      '6. If the current message text looks like a garbled or phonetic transcription (e.g. English words spelled out in Devanagari, or otherwise ambiguous), interpret the intended meaning and respond in English by default.\n\n' +
 
       'TONE & STYLE:\n' +
       '- Direct, concise, professional.\n' +
@@ -301,4 +299,3 @@ export default async function handler(req, res) {
 export const config = {
   api: { bodyParser: { sizeLimit: '8mb' } }
 };
-    
