@@ -809,19 +809,37 @@
       localStorage.setItem(VOICE_STORAGE_KEY, voiceSelect.value);
     } catch (_) { /* ignore storage errors, selection still works for this session */ }
 
-    // Instant audible confirmation of the newly picked voice.
+    // Stop any currently playing audio immediately — new voice applies now.
     window.speechSynthesis.cancel();
     stopGeminiVoice();
+
+    // If live mode is running, stop listening while we play the preview,
+    // then resume — this is the same handoff speakInLiveMode already does,
+    // so the mic never fights with TTS during voice-switch preview.
+    if (liveModeActive) {
+      stopLiveListeningForSpeech();
+      isLiveSpeaking = true;
+    }
 
     const voiceLabel = voiceSelect.options[voiceSelect.selectedIndex].textContent.split(' ')[0];
     const previewText = 'Hi, this is ' + voiceLabel + '.';
 
-    const usedGemini = await speakWithGemini(previewText, null, null);
+    const onPreviewDone = () => {
+      // Resume live listening after preview finishes (only if still in live mode).
+      if (liveModeActive) {
+        isLiveSpeaking = false;
+        setTimeout(() => { if (liveModeActive && !isLiveSpeaking) startLiveListening(); }, 400);
+      }
+    };
+
+    const usedGemini = await speakWithGemini(previewText, null, onPreviewDone);
     if (usedGemini) return;
 
-    if (!('speechSynthesis' in window)) return;
+    if (!('speechSynthesis' in window)) { onPreviewDone(); return; }
     const utterance = new SpeechSynthesisUtterance(previewText);
     utterance.lang = FIXED_SPEECH_LANG;
+    utterance.onend = onPreviewDone;
+    utterance.onerror = onPreviewDone;
     window.speechSynthesis.speak(utterance);
   });
 
@@ -1296,8 +1314,6 @@
   let liveModeActive = false;
   let liveRecognizer = null;
   let isLiveSpeaking = false;
-  let liveUtteranceBuffer = '';
-  let liveResultCursor = 0;
   let liveSilenceTimer = null;
   const LIVE_SILENCE_MS = 1100; // pause length that counts as "user finished talking"
   const LIVE_STOP_WORDS = ['ruko ruko', 'ruk jao', 'ruko', 'stop stop', 'stop', 'bas ruko', 'chup ho jao', 'wait wait'];
@@ -1306,28 +1322,6 @@
   function containsStopWord(text) {
     const t = (text || '').toLowerCase();
     return LIVE_STOP_WORDS.some(w => t.includes(w));
-  }
-
-  function finalizeLiveUtterance() {
-    if (!liveModeActive || isLiveSpeaking) return;
-    const finished = liveUtteranceBuffer.trim();
-    liveUtteranceBuffer = '';
-
-    if (finished && !containsStopWord(finished)) {
-      // Mic OFF the instant we treat this as a complete utterance — not
-      // just when the AI starts talking. Otherwise the mic kept listening
-      // (and could pick up background noise) all through the time the AI
-      // is still "thinking", which is not properly muted/inactive.
-      stopLiveListeningForSpeech();
-      userInput.value = finished;
-      if (chatForm.requestSubmit) chatForm.requestSubmit();
-      else chatForm.dispatchEvent(new Event('submit', { cancelable: true }));
-      return; // mic stays off; startLiveListening() resumes it only once the AI finishes speaking
-    }
-    // Nothing usable was said (silence/noise) — the SAME recognizer keeps
-    // running underneath, so the mic just keeps listening quietly. No
-    // stop/restart happens here, which is what stops the mic from
-    // visibly/audibly toggling on and off between utterances.
   }
 
   function createLiveRecognizer() {
@@ -1342,8 +1336,40 @@
     rec.interimResults = true;
     rec.lang = 'en-IN'; // English speech -> English text; Hindi speech -> phonetic Hinglish (Roman script), never Devanagari.
 
-    liveResultCursor = 0;
-    liveUtteranceBuffer = '';
+    // Fix for repeated text ("PizzaPizza price"): these used to be shared
+    // module-level variables. When one recognizer was stopped and a new
+    // one created for the next utterance, a trailing/late-firing onresult
+    // event from the just-stopped OLD recognizer could still land after
+    // the new one had already reset the shared buffer — re-injecting the
+    // previous utterance's words into the new one. Keeping the buffer and
+    // cursor as local closures, private to THIS recognizer instance,
+    // means a stale event from an old instance can only ever touch its
+    // own (already abandoned) closure, never the new session's text.
+    let utteranceBuffer = '';
+    let resultCursor = 0;
+
+    const finalize = () => {
+      if (!liveModeActive || isLiveSpeaking) return;
+      const finished = utteranceBuffer.trim();
+      // Reset BOTH buffer AND cursor together so a restarted recognizer
+      // always starts accumulating from index 0, never re-picks old results.
+      utteranceBuffer = '';
+      resultCursor = 0;
+
+      if (finished && !containsStopWord(finished)) {
+        // Mic OFF the instant we treat this as a complete utterance — not
+        // just when the AI starts talking. Otherwise the mic kept listening
+        // (and could pick up background noise) all through the time the AI
+        // is still "thinking", which is not properly muted/inactive.
+        stopLiveListeningForSpeech();
+        userInput.value = finished;
+        if (chatForm.requestSubmit) chatForm.requestSubmit();
+        else chatForm.dispatchEvent(new Event('submit', { cancelable: true }));
+        return; // mic stays off; startLiveListening() resumes it only once the AI finishes speaking
+      }
+      // Nothing usable was said (silence/noise) — the SAME recognizer keeps
+      // running underneath, so the mic just keeps listening quietly.
+    };
 
     rec.onresult = (event) => {
       // Feedback-loop fix: while the AI is speaking, the recognizer is
@@ -1353,29 +1379,24 @@
       // the mic — it must NEVER be treated as user speech.
       if (isLiveSpeaking) return;
 
-      // Fix for repeated/duplicated words: continuous mode on Android
-      // Chrome can re-fire the same "final" result again later in the
-      // same session. liveResultCursor only ever moves forward, so a
-      // given result index is appended into the buffer at most once,
-      // no matter how many times the engine re-sends it.
       let interim = '';
-      for (let i = liveResultCursor; i < event.results.length; i++) {
+      for (let i = resultCursor; i < event.results.length; i++) {
         const result = event.results[i];
         if (result.isFinal) {
-          liveUtteranceBuffer += result[0].transcript;
-          liveResultCursor = i + 1;
+          utteranceBuffer += result[0].transcript;
+          resultCursor = i + 1;
         } else {
           interim += result[0].transcript;
         }
       }
 
-      const snapshot = (liveUtteranceBuffer + ' ' + interim).trim();
+      const snapshot = (utteranceBuffer + ' ' + interim).trim();
 
       if (containsStopWord(snapshot)) {
         window.speechSynthesis.cancel();
         stopGeminiVoice();
         isLiveSpeaking = false;
-        liveUtteranceBuffer = '';
+        utteranceBuffer = '';
         clearTimeout(liveSilenceTimer);
         userInput.value = '';
         return;
@@ -1385,7 +1406,7 @@
 
       // Restart the "has the user paused" countdown on every new word.
       clearTimeout(liveSilenceTimer);
-      liveSilenceTimer = setTimeout(finalizeLiveUtterance, LIVE_SILENCE_MS);
+      liveSilenceTimer = setTimeout(finalize, LIVE_SILENCE_MS);
     };
 
     rec.onerror = (event) => {
@@ -1476,7 +1497,6 @@
       try { liveRecognizer.onend = null; liveRecognizer.stop(); } catch (_) {}
       liveRecognizer = null;
     }
-    liveUtteranceBuffer = '';
   }
 
   function startLiveMode() {
@@ -1486,7 +1506,6 @@
     }
     liveModeActive = true;
     liveBtn.classList.add('live-active');
-    liveUtteranceBuffer = '';
 
     // Instant greeting the moment the button is tapped — no waiting on a
     // round trip to the AI, matching Gemini Live's immediate "hi".
@@ -1560,6 +1579,8 @@
     return voiceSelect ? voiceSelect.value : 'gemini:Ursa';
   }
 
+  let geminiVoiceWarningShown = false;
+
   async function speakWithGemini(text, onStart, onEnd) {
     const voiceValue = getSelectedVoice();
     if (voiceValue === 'browser') return false;
@@ -1572,7 +1593,13 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'tts', text: expandDigitsForSpeech(text), voice: voiceName })
       });
-      if (!res.ok) throw new Error('TTS request failed: ' + res.status);
+
+      if (!res.ok) {
+        let detail = '';
+        try { detail = (await res.json())?.error?.message || ''; } catch (_) {}
+        throw new Error(`TTS request failed (${res.status})${detail ? ': ' + detail : ''}`);
+      }
+
       const data = await res.json();
       if (!data.audioBase64) throw new Error('No audio in TTS response');
 
@@ -1594,6 +1621,27 @@
       return true;
     } catch (err) {
       console.error('Gemini voice failed, falling back to system voice:', err);
+
+      // This has been reported as "voice selection doesn't apply" — that
+      // usually means this Gemini call is failing every single time and
+      // silently falling back, so the selected voice never actually
+      // plays. Surface the real reason once so it's visible instead of
+      // an invisible, repeated silent failure.
+      if (!geminiVoiceWarningShown) {
+        geminiVoiceWarningShown = true;
+        const session = getCurrentSession();
+        if (session) {
+          const warnMsg = {
+            role: 'ai',
+            text: `Gemini voice (${voiceName}) load nahi ho payi, isliye system voice use ho rahi hai. Reason: ${err.message}`,
+            attachments: [],
+            createdAt: Date.now()
+          };
+          session.messages.push(warnMsg);
+          saveSession(session);
+          appendMessageDOM(warnMsg, session.messages.length - 1);
+        }
+      }
       return false;
     }
   }
@@ -1813,7 +1861,8 @@
 
     const row = chatContainer.querySelector(`.row[data-index="${index}"]`);
     if (!row) return;
-const originalMsg = session.messages[index];
+
+    const originalMsg = session.messages[index];
     const historyForRegen = buildApiHistory({ messages: session.messages.slice(0, index) });
 
     isSending = true;
@@ -2110,4 +2159,3 @@ const originalMsg = session.messages[index];
 </script>
 </body>
 </html>
-    
