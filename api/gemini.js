@@ -27,7 +27,9 @@ const SYSTEM_INSTRUCTION = {
       'If a customer asks for a "price list", "full menu", "menu please", or "what do you have", show the full menu with prices category by category. Do not refuse this request.\n\n' +
 
       'QUANTITY CALCULATION:\n' +
-      'If a user sends just a number (e.g. "5", "19", "10") after asking about an item, treat it as a quantity. Calculate: quantity x unit price. If total >= 1000 Baisa, also show in Rials. Example: 5 x 200 Baisa = 1000 Baisa (1 Rial).\n' +
+      'If a user sends just a number (e.g. "5", "19", "10") after asking about an item, treat it as a quantity. Calculate: quantity x unit price.\n' +
+      'CONVERSION RULE: If total is less than 1000 Baisa, show in Baisa only. If total is exactly 1000 Baisa or more, convert and show in Rials only (1000 Baisa = 1 Rial). Never show both units together.\n' +
+      'Examples: 4 x 200 Baisa = 800 Baisa | 5 x 200 Baisa = 1 Rial | 7 x 200 Baisa = 1.4 Rials | 3 x 5.5 Rials = 16.5 Rials\n' +
       'If someone asks "X pcs price" or "price of X items", calculate and answer directly.\n\n' +
 
       'GREETINGS & FAREWELLS:\n' +
@@ -295,3 +297,4 @@ export default async function handler(req, res) {
 export const config = {
   api: { bodyParser: { sizeLimit: '8mb' } }
 };
+      
