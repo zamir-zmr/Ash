@@ -1,5 +1,6 @@
 // api/gemini.js
 const MODEL = 'gemini-3.1-flash-lite';
+const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 
 const SYSTEM_INSTRUCTION = {
   parts: [{
@@ -40,6 +41,7 @@ const SYSTEM_INSTRUCTION = {
       'If a customer says "Morning", "Good morning", "Hi", "Hello", "Salam", "Hey" or any greeting, reply warmly. Example: "Good morning! How can I help you today?"\n' +
       'If a customer says "Good night", "Bye", "Goodbye", "See you", "Take care" or any farewell, reply warmly. Example: "Good night! Hope to see you again at ASH BAKES."\n' +
       'If a customer says "Good evening", reply: "Good evening! How can I help you?"\n' +
+      'If a customer asks "How are you?" or any similar wellbeing question, reply: "I am fine, how can I help you?"\n' +
       'NEVER reply to greetings or farewells with "How can I help you? Ask me about our menu..." — that is only for truly meaningless input.\n\n' +
 
       'BARE PRICE QUERY:\n' +
@@ -214,11 +216,76 @@ const QUICK_REPLIES = {
     patterns: /who (made|built|created|are) you|what are you|are you (a |an )?(bot|ai|robot|human|real)|who is (this|zamir)|zamir ai/i,
     reply: () => 'I\'m the ASH BAKES AI assistant — here to help you with our menu, prices, timings, and branch info.'
   },
+  wellbeing: {
+    patterns: /^(how are you|how r u|how're you|hows it going|how is it going|how you doing|how are u)\s*\.?\s*\??\s*$/i,
+    reply: () => 'I am fine, how can I help you?'
+  },
   casual: {
-    patterns: /^(come here|come|what\'?s up|how are you|how r u|you there|you ok|are you there|hello there)\s*\.?\s*$/i,
+    patterns: /^(come here|come|what\'?s up|you there|you ok|are you there|hello there)\s*\.?\s*$/i,
     reply: () => 'I\'m here! Ask me about our menu, prices, timings, or branch contacts.'
   }
 };
+
+async function handleTTS(req, res, apiKey) {
+  const { text, voice } = req.body || {};
+  if (!text) {
+    res.status(400).json({ error: { message: 'Missing "text" for TTS' } });
+    return;
+  }
+
+  const voiceName = voice || 'Ursa';
+  const ttsUrl = `https://generativelanguage.googleapis.com/v1beta/models/${TTS_MODEL}:generateContent?key=${apiKey}`;
+
+  let ttsResponse;
+  try {
+    ttsResponse = await fetch(ttsUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text }] }],
+        generationConfig: {
+          responseModalities: ['AUDIO'],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName }
+            }
+          }
+        }
+      })
+    });
+  } catch (err) {
+    res.status(502).json({ error: { message: 'Failed to reach Gemini TTS API', detail: err.message } });
+    return;
+  }
+
+  if (!ttsResponse.ok) {
+    let detail = null;
+    try { detail = await ttsResponse.json(); } catch (_) {}
+    res.status(ttsResponse.status).json({
+      error: { message: detail?.error?.message || `Gemini TTS error: ${ttsResponse.status}` }
+    });
+    return;
+  }
+
+  let data;
+  try {
+    data = await ttsResponse.json();
+  } catch (err) {
+    res.status(502).json({ error: { message: 'Invalid TTS response from Gemini' } });
+    return;
+  }
+
+  const audioPart = data?.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+  const audioBase64 = audioPart?.inlineData?.data;
+  const mimeType = audioPart?.inlineData?.mimeType || 'audio/L16;rate=24000';
+
+  if (!audioBase64) {
+    res.status(502).json({ error: { message: 'No audio returned from Gemini TTS' } });
+    return;
+  }
+
+  res.status(200).json({ audioBase64, mimeType });
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -229,6 +296,12 @@ export default async function handler(req, res) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     res.status(500).json({ error: { message: 'Server misconfigured: GEMINI_API_KEY missing' } });
+    return;
+  }
+
+  // Text-to-speech branch: { action: 'tts', text, voice } -> { audioBase64, mimeType }
+  if (req.body && req.body.action === 'tts') {
+    await handleTTS(req, res, apiKey);
     return;
   }
 
