@@ -205,6 +205,14 @@ const QUICK_REPLIES = {
   thanks: {
     patterns: /^(thanks|thank you|shukran|thankyou|thx|ok|okay|alright|noted|got it|fine|great)\s*\.?\s*$/i,
     reply: () => 'You\'re welcome! Let me know if you need anything else.'
+  },
+  identity: {
+    patterns: /who (made|built|created|are) you|what are you|are you (a |an )?(bot|ai|robot|human|real)|who is (this|zamir)|zamir ai/i,
+    reply: () => 'I\'m the ASH BAKES AI assistant — here to help you with our menu, prices, timings, and branch info.'
+  },
+  casual: {
+    patterns: /^(come here|come|what\'?s up|how are you|how r u|you there|you ok|are you there|hello there)\s*\.?\s*$/i,
+    reply: () => 'I\'m here! Ask me about our menu, prices, timings, or branch contacts.'
   }
 };
 
@@ -287,4 +295,3 @@ export default async function handler(req, res) {
 export const config = {
   api: { bodyParser: { sizeLimit: '8mb' } }
 };
-      
