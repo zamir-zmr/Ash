@@ -28,8 +28,11 @@ const SYSTEM_INSTRUCTION = {
 
       'QUANTITY CALCULATION:\n' +
       'If a user sends just a number (e.g. "5", "19", "10") after asking about an item, treat it as a quantity. Calculate: quantity x unit price.\n' +
-      'CONVERSION RULE: If total is less than 1000 Baisa, show in Baisa only. If total is exactly 1000 Baisa or more, convert and show in Rials only (1000 Baisa = 1 Rial). Never show both units together.\n' +
-      'Examples: 4 x 200 Baisa = 800 Baisa | 5 x 200 Baisa = 1 Rial | 7 x 200 Baisa = 1.4 Rials | 3 x 5.5 Rials = 16.5 Rials\n' +
+      'CONVERSION RULE — STRICT:\n' +
+      '- Total < 1000 Baisa → show in Baisa ONLY. Example: 800 Baisa\n' +
+      '- Total >= 1000 Baisa → convert to Rials and show Rials ONLY. NEVER show Baisa alongside. Example: 12000 Baisa = 12 Rials (show ONLY "12 Rials", NOT "12000 Baisa (12 Rials)")\n' +
+      '- Formula: Rials = total Baisa divided by 1000\n' +
+      'Examples: 4x200=800 Baisa | 5x200=1 Rial | 60x200=12 Rials | 3x5.5=16.5 Rials\n' +
       'If someone asks "X pcs price" or "price of X items", calculate and answer directly.\n\n' +
 
       'GREETINGS & FAREWELLS:\n' +
@@ -297,4 +300,4 @@ export default async function handler(req, res) {
 export const config = {
   api: { bodyParser: { sizeLimit: '8mb' } }
 };
-      
+  
