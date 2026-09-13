@@ -713,10 +713,10 @@
       <div class="brand-status"><span class="status-dot" id="status-dot"></span><span id="status-text">Connecting...</span></div>
     </div>
     <select id="voice-select" title="Voice">
-      <option value="gemini:Ursa" selected>Ursa (Voice)</option>
-      <option value="gemini:Puck">Puck (Voice)</option>
-      <option value="gemini:Kore">Kore (Voice)</option>
-      <option value="gemini:Charon">Charon (Voice)</option>
+      <option value="gemini:Ursa" selected>Ursa (Gemini)</option>
+      <option value="gemini:Puck">Puck (Gemini)</option>
+      <option value="gemini:Kore">Kore (Gemini)</option>
+      <option value="gemini:Charon">Charon (Gemini)</option>
       <option value="browser">System voice</option>
     </select>
     <button id="sound-toggle" type="button" title="Sound on/off">
@@ -787,6 +787,29 @@
   const micBtn = document.getElementById('mic-btn');
   const liveBtn = document.getElementById('live-btn');
   const voiceSelect = document.getElementById('voice-select');
+
+  /* ---------------- Voice selection persistence ----------------
+     The chosen voice (Ursa, Puck, Kore, Charon, or System voice) is
+     saved to localStorage and reloaded on every visit, so it stays
+     fixed until the user themselves changes it — it never resets or
+     randomly changes on its own. */
+  const VOICE_STORAGE_KEY = 'zmrai_selected_voice';
+
+  (function restoreSavedVoice() {
+    try {
+      const saved = localStorage.getItem(VOICE_STORAGE_KEY);
+      if (saved && [...voiceSelect.options].some(opt => opt.value === saved)) {
+        voiceSelect.value = saved;
+      }
+    } catch (_) { /* localStorage unavailable — fall back to the HTML default */ }
+  })();
+
+  voiceSelect.addEventListener('change', () => {
+    try {
+      localStorage.setItem(VOICE_STORAGE_KEY, voiceSelect.value);
+    } catch (_) { /* ignore storage errors, selection still works for this session */ }
+  });
+
   const attachMenu = document.getElementById('attach-menu');
   const attachMenuBackdrop = document.getElementById('attach-menu-backdrop');
   const attachCameraOption = document.getElementById('attach-camera-option');
@@ -1258,7 +1281,10 @@
   let liveModeActive = false;
   let liveRecognizer = null;
   let isLiveSpeaking = false;
-  let livePendingTranscript = '';
+  let liveUtteranceBuffer = '';
+  let liveResultCursor = 0;
+  let liveSilenceTimer = null;
+  const LIVE_SILENCE_MS = 1100; // pause length that counts as "user finished talking"
   const LIVE_STOP_WORDS = ['ruko ruko', 'ruk jao', 'ruko', 'stop stop', 'stop', 'bas ruko', 'chup ho jao', 'wait wait'];
   const LIVE_GREETING = 'Hi! Please speak, I am listening.';
 
@@ -1267,57 +1293,97 @@
     return LIVE_STOP_WORDS.some(w => t.includes(w));
   }
 
-   function createLiveRecognizer() {
+  function finalizeLiveUtterance() {
+    if (!liveModeActive || isLiveSpeaking) return;
+    const finished = liveUtteranceBuffer.trim();
+    liveUtteranceBuffer = '';
+
+    if (finished && !containsStopWord(finished)) {
+      userInput.value = finished;
+      if (chatForm.requestSubmit) chatForm.requestSubmit();
+      else chatForm.dispatchEvent(new Event('submit', { cancelable: true }));
+      return; // mic stays off; startLiveListening() resumes it once the AI finishes speaking
+    }
+    // Nothing usable was said (silence/noise) — the SAME recognizer keeps
+    // running underneath, so the mic just keeps listening quietly. No
+    // stop/restart happens here, which is what stops the mic from
+    // visibly/audibly toggling on and off between utterances.
+  }
+
+  function createLiveRecognizer() {
     const rec = new SpeechRecognitionAPI();
-    // Fix for repeated/duplicated words: continuous=true on Android Chrome
-    // sometimes re-emits earlier "final" segments again inside the same
-    // session, and manually concatenating (+=) those chunks compounded the
-    // duplication ("1 se lekar1 se lekar1 se lekar..."). Using one
-    // utterance per session avoids that engine quirk entirely — the
-    // session ends naturally when the user pauses, and we immediately
-    // start a fresh session for the next utterance (see rec.onend below).
-    rec.continuous = false;
+    // Fix for mic randomly toggling on/off: keep ONE continuous session
+    // open for the whole time the user is meant to be listened to,
+    // instead of stopping and restarting a new recognizer after every
+    // single utterance. We detect "the user finished talking" ourselves
+    // with a short silence timer, not by letting the browser end the
+    // session (which is what caused the on/off flicker before).
+    rec.continuous = true;
     rec.interimResults = true;
     rec.lang = 'en-IN'; // English speech -> English text; Hindi speech -> phonetic Hinglish (Roman script), never Devanagari.
 
+    liveResultCursor = 0;
+    liveUtteranceBuffer = '';
+
     rec.onresult = (event) => {
       // Feedback-loop fix: while the AI is speaking, the recognizer is
-      // fully stopped (see speakInLiveMode / rec.onend below), so this
-      // should never fire during playback. This guard is just a safety
-      // net in case a stray event lands right as we're stopping the mic —
-      // it must NEVER be treated as user speech, otherwise the AI's own
-      // voice gets picked up and re-sent as if the user said it.
+      // fully stopped (see speakInLiveMode / stopLiveListeningForSpeech),
+      // so this should never fire during playback. This guard is just a
+      // safety net in case a stray event lands right as we're stopping
+      // the mic — it must NEVER be treated as user speech.
       if (isLiveSpeaking) return;
 
-      // Recompute the full transcript fresh from all results every time,
-      // instead of appending (+=) to a running buffer — this is what
-      // makes the fix self-correcting even if the engine re-sends a
-      // result: we always end up with the current best transcript, not
-      // an ever-growing, duplicated one.
-      let transcript = '';
-      for (let i = 0; i < event.results.length; i++) {
-        transcript += event.results[i][0].transcript;
+      // Fix for repeated/duplicated words: continuous mode on Android
+      // Chrome can re-fire the same "final" result again later in the
+      // same session. liveResultCursor only ever moves forward, so a
+      // given result index is appended into the buffer at most once,
+      // no matter how many times the engine re-sends it.
+      let interim = '';
+      for (let i = liveResultCursor; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (result.isFinal) {
+          liveUtteranceBuffer += result[0].transcript;
+          liveResultCursor = i + 1;
+        } else {
+          interim += result[0].transcript;
+        }
       }
-      livePendingTranscript = transcript.trim();
-      userInput.value = livePendingTranscript;
+
+      const snapshot = (liveUtteranceBuffer + ' ' + interim).trim();
+
+      if (containsStopWord(snapshot)) {
+        window.speechSynthesis.cancel();
+        stopGeminiVoice();
+        isLiveSpeaking = false;
+        liveUtteranceBuffer = '';
+        clearTimeout(liveSilenceTimer);
+        userInput.value = '';
+        return;
+      }
+
+      userInput.value = snapshot;
+
+      // Restart the "has the user paused" countdown on every new word.
+      clearTimeout(liveSilenceTimer);
+      liveSilenceTimer = setTimeout(finalizeLiveUtterance, LIVE_SILENCE_MS);
     };
 
-    rec.onerror = () => {};
+    rec.onerror = (event) => {
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        stopLiveMode();
+      }
+      // 'no-speech' / 'aborted' happen routinely during a long-running
+      // continuous session with nobody talking — safe to ignore.
+    };
 
     rec.onend = () => {
-      if (!liveModeActive || isLiveSpeaking) return;
-
-      const finished = livePendingTranscript.trim();
-      livePendingTranscript = '';
-
-      if (finished && !containsStopWord(finished)) {
-        userInput.value = finished;
-        if (chatForm.requestSubmit) chatForm.requestSubmit();
-        else chatForm.dispatchEvent(new Event('submit', { cancelable: true }));
-        return; // mic stays off; startLiveListening() resumes it once the AI finishes speaking
+      // The browser can still end a continuous session on its own after
+      // a while (varies by device). If live mode is still meant to be
+      // on and the AI isn't speaking, quietly start a fresh session so
+      // listening effectively continues without the user noticing.
+      if (liveModeActive && !isLiveSpeaking) {
+        startLiveListening();
       }
-
-      startLiveListening();
     };
 
     return rec;
@@ -1328,6 +1394,7 @@
     if (liveRecognizer) {
       try { liveRecognizer.onend = null; liveRecognizer.stop(); } catch (_) {}
     }
+    clearTimeout(liveSilenceTimer);
     try {
       liveRecognizer = createLiveRecognizer();
       liveRecognizer.start();
@@ -1341,11 +1408,12 @@
     // so the microphone hardware itself is off — this is what actually
     // prevents the AI's TTS audio from being captured and looped back
     // in as a fake user message.
+    clearTimeout(liveSilenceTimer);
     if (liveRecognizer) {
       try { liveRecognizer.onend = null; liveRecognizer.stop(); } catch (_) {}
       liveRecognizer = null;
     }
-    livePendingTranscript = '';
+    liveUtteranceBuffer = '';
   }
 
   function startLiveMode() {
@@ -1355,7 +1423,7 @@
     }
     liveModeActive = true;
     liveBtn.classList.add('live-active');
-    livePendingTranscript = '';
+    liveUtteranceBuffer = '';
 
     // Instant greeting the moment the button is tapped — no waiting on a
     // round trip to the AI, matching Gemini Live's immediate "hi".
@@ -1976,3 +2044,4 @@
 </script>
 </body>
 </html>
+  const 
