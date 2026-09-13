@@ -30,10 +30,24 @@ const SYSTEM_INSTRUCTION = {
       'If a user sends just a number (e.g. "5", "19", "10") after asking about an item, treat it as a quantity. Calculate: quantity x unit price. If total >= 1000 Baisa, also show in Rials. Example: 5 x 200 Baisa = 1000 Baisa (1 Rial).\n' +
       'If someone asks "X pcs price" or "price of X items", calculate and answer directly.\n\n' +
 
+      'GREETINGS & FAREWELLS:\n' +
+      'If a customer says "Morning", "Good morning", "Hi", "Hello", "Salam", "Hey" or any greeting, reply warmly. Example: "Good morning! How can I help you today?"\n' +
+      'If a customer says "Good night", "Bye", "Goodbye", "See you", "Take care" or any farewell, reply warmly. Example: "Good night! Hope to see you again at ASH BAKES."\n' +
+      'If a customer says "Good evening", reply: "Good evening! How can I help you?"\n' +
+      'NEVER reply to greetings or farewells with "How can I help you? Ask me about our menu..." — that is only for truly meaningless input.\n\n' +
+
+      'BARE PRICE QUERY:\n' +
+      'If a customer sends only the word "price" or "price please" WITHOUT any item name in the current message, AND there is no recent item mentioned in the conversation, ask: "Which item would you like the price for?"\n' +
+      'If "price please" or "price?" comes right after an item was mentioned in the conversation, give that item\'s price.\n\n' +
+
       'MEANINGLESS INPUT:\n' +
-      'If a user sends a single letter, random characters, or unclear text (like "U", "Oo", "k"), reply: "How can I help you? Ask me about our menu, prices, or timings."\n\n' +
+      'If a user sends a single letter or random characters (like "U", "Oo", "k", "xyz"), reply: "How can I help you? Ask me about our menu, prices, or timings."\n\n' +
 
       'LANGUAGE BEHAVIOR:\n' +
+      '1. DEFAULT: Always respond in English.\n' +
+      '2. ARABIC: If user writes in Arabic, respond fully in Arabic.\n' +
+      '3. HINDI/HINGLISH: If user writes in Hindi or Hinglish, respond in same style.\n' +
+      '4. Mirror the user language instantly. Switch if they switch.\n\n' +
       '1. DEFAULT: Always respond in English.\n' +
       '2. ARABIC: If user writes in Arabic, respond fully in Arabic.\n' +
       '3. HINDI/HINGLISH: If user writes in Hindi or Hinglish, respond in same style.\n' +
@@ -173,6 +187,27 @@ const SYSTEM_INSTRUCTION = {
   }]
 };
 
+// Hardcoded replies — no AI call needed
+const QUICK_REPLIES = {
+  greetings: {
+    patterns: /^(hi|hello|hey|salam|salaam|assalam|good morning|morning|good afternoon|good evening|evening|howdy|greetings|sup|yo)\b/i,
+    reply: (msg) => {
+      if (/morning/i.test(msg)) return 'Good morning! Welcome to ASH BAKES. How can I help you?';
+      if (/evening/i.test(msg)) return 'Good evening! Welcome to ASH BAKES. How can I help you?';
+      if (/afternoon/i.test(msg)) return 'Good afternoon! Welcome to ASH BAKES. How can I help you?';
+      return 'Hello! Welcome to ASH BAKES. How can I help you?';
+    }
+  },
+  farewells: {
+    patterns: /^(bye|goodbye|good night|goodnight|night|see you|take care|ok bye|okay bye|thanks bye|thank you bye|shukran|khuda hafiz|allah hafiz)\b/i,
+    reply: () => 'Thank you for visiting ASH BAKES. Have a wonderful day! 😊'
+  },
+  thanks: {
+    patterns: /^(thanks|thank you|shukran|thankyou|thx|ok|okay|alright|noted|got it|fine|great)\s*\.?\s*$/i,
+    reply: () => 'You\'re welcome! Let me know if you need anything else.'
+  }
+};
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: { message: 'Method not allowed' } });
@@ -189,6 +224,24 @@ export default async function handler(req, res) {
   if (!contents) {
     res.status(400).json({ error: { message: 'Missing "contents" in request body' } });
     return;
+  }
+
+  // Check last user message for quick hardcoded replies
+  const lastMsg = contents?.slice(-1)?.[0];
+  const lastText = lastMsg?.parts?.map(p => p.text || '').join(' ').trim() || '';
+
+  for (const key of Object.keys(QUICK_REPLIES)) {
+    const rule = QUICK_REPLIES[key];
+    if (rule.patterns.test(lastText)) {
+      const replyText = rule.reply(lastText);
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.setHeader('Connection', 'keep-alive');
+      const chunk = JSON.stringify({ candidates: [{ content: { parts: [{ text: replyText }] } }] });
+      res.write(`data: ${chunk}\n\n`);
+      res.end();
+      return;
+    }
   }
 
   const upstreamUrl = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:streamGenerateContent?alt=sse&key=${apiKey}`;
@@ -234,4 +287,4 @@ export default async function handler(req, res) {
 export const config = {
   api: { bodyParser: { sizeLimit: '8mb' } }
 };
-    
+      
