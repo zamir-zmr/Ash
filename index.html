@@ -213,6 +213,9 @@
     align-items:center;
     gap:12px;
     flex-shrink:0;
+    position:sticky;
+    top:0;
+    z-index:20;
   }
 
   #menu-btn{
@@ -231,6 +234,19 @@
 
   #menu-btn:hover{ background:rgba(255,255,255,0.06); color:var(--text); }
   #menu-btn svg{ width:20px; height:20px; }
+
+  #voice-select{
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    color:var(--text-dim);
+    font-family:'Inter',sans-serif;
+    font-size:12px;
+    padding:6px 8px;
+    border-radius:8px;
+    max-width:120px;
+    flex-shrink:0;
+  }
+  #voice-select:focus{ outline:none; border-color:var(--accent); color:var(--text); }
 
   @media (min-width:900px){
     #menu-btn{ display:none; }
@@ -487,6 +503,9 @@
     border-top:1px solid var(--border);
     padding:10px 16px calc(10px + env(safe-area-inset-bottom));
     flex-shrink:0;
+    position:sticky;
+    bottom:0;
+    z-index:20;
   }
 
   #attach-preview-bar{
@@ -693,6 +712,13 @@
       <div class="brand-title">Zamir Ai</div>
       <div class="brand-status"><span class="status-dot" id="status-dot"></span><span id="status-text">Connecting...</span></div>
     </div>
+    <select id="voice-select" title="Voice">
+      <option value="gemini:Ursa" selected>Ursa (Gemini)</option>
+      <option value="gemini:Puck">Puck (Gemini)</option>
+      <option value="gemini:Kore">Kore (Gemini)</option>
+      <option value="gemini:Charon">Charon (Gemini)</option>
+      <option value="browser">System voice</option>
+    </select>
     <button id="sound-toggle" type="button" title="Sound on/off">
       <svg id="sound-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
     </button>
@@ -735,8 +761,7 @@
   <button type="button" class="attach-menu-item" id="attach-camera-option">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
     <span>Camera</span>
-
-    </button>
+  </button>
   <button type="button" class="attach-menu-item" id="attach-gallery-option">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
     <span>Photos &amp; Videos</span>
@@ -761,6 +786,7 @@
   const fileInputCamera = document.getElementById('file-input-camera');
   const micBtn = document.getElementById('mic-btn');
   const liveBtn = document.getElementById('live-btn');
+  const voiceSelect = document.getElementById('voice-select');
   const attachMenu = document.getElementById('attach-menu');
   const attachMenuBackdrop = document.getElementById('attach-menu-backdrop');
   const attachCameraOption = document.getElementById('attach-camera-option');
@@ -1241,7 +1267,7 @@
     return LIVE_STOP_WORDS.some(w => t.includes(w));
   }
 
-  function createLiveRecognizer() {
+   function createLiveRecognizer() {
     const rec = new SpeechRecognitionAPI();
     // Fix for repeated/duplicated words: continuous=true on Android Chrome
     // sometimes re-emits earlier "final" segments again inside the same
@@ -1363,21 +1389,113 @@
     return 'en-IN';                                     // English / Hinglish (Roman script)
   }
 
-  function speakInLiveMode(text) {
+  /* ---------------- Gemini voice (Ursa, etc.) playback ----------------
+     Gemini's TTS returns raw 16-bit PCM audio (no file header), so we
+     wrap it in a minimal WAV header client-side before handing it to
+     an <audio> element — browsers can't play headerless PCM directly. */
+  function pcm16ToWavBlob(base64Pcm, sampleRate) {
+    const binary = atob(base64Pcm);
+    const len = binary.length;
+    const buffer = new ArrayBuffer(44 + len);
+    const view = new DataView(buffer);
+
+    function writeString(offset, str) {
+      for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+    }
+
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + len, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeString(36, 'data');
+    view.setUint32(40, len, true);
+
+    const bytes = new Uint8Array(buffer, 44);
+    for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+
+    return new Blob([buffer], { type: 'audio/wav' });
+  }
+
+  let currentTtsAudio = null;
+
+  function getSelectedVoice() {
+    return voiceSelect ? voiceSelect.value : 'gemini:Ursa';
+  }
+
+  async function speakWithGemini(text, onStart, onEnd) {
+    const voiceValue = getSelectedVoice();
+    if (voiceValue === 'browser') return false;
+
+    const voiceName = voiceValue.split(':')[1] || 'Ursa';
+
+    try {
+      const res = await fetch(STREAM_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'tts', text: expandDigitsForSpeech(text), voice: voiceName })
+      });
+      if (!res.ok) throw new Error('TTS request failed: ' + res.status);
+      const data = await res.json();
+      if (!data.audioBase64) throw new Error('No audio in TTS response');
+
+      const sampleRate = parseInt((data.mimeType || '').match(/rate=(\d+)/)?.[1] || '24000', 10);
+      const blob = pcm16ToWavBlob(data.audioBase64, sampleRate);
+      const url = URL.createObjectURL(blob);
+
+      if (currentTtsAudio) {
+        currentTtsAudio.pause();
+        if (currentTtsAudio.src) URL.revokeObjectURL(currentTtsAudio.src);
+      }
+
+      currentTtsAudio = new Audio(url);
+      currentTtsAudio.onended = () => { URL.revokeObjectURL(url); if (onEnd) onEnd(); };
+      currentTtsAudio.onerror = () => { URL.revokeObjectURL(url); if (onEnd) onEnd(); };
+
+      if (onStart) onStart();
+      await currentTtsAudio.play();
+      return true;
+    } catch (err) {
+      console.error('Gemini voice failed, falling back to system voice:', err);
+      return false;
+    }
+  }
+
+  function stopGeminiVoice() {
+    if (currentTtsAudio) {
+      currentTtsAudio.pause();
+      if (currentTtsAudio.src) URL.revokeObjectURL(currentTtsAudio.src);
+      currentTtsAudio = null;
+    }
+  }
+
+  async function speakInLiveMode(text) {
     if (!liveModeActive || !text) return;
     isLiveSpeaking = true;
     stopLiveListeningForSpeech(); // mic OFF while the AI talks — stops the feedback loop
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(stripMarkdownForSpeech(text));
-    utterance.lang = detectSpeechLang(text); // speaks in the reply's actual script; won't force-mispronounce, and won't drift by accident
-    utterance.onend = () => {
+    stopGeminiVoice();
+
+    const onDone = () => {
       isLiveSpeaking = false;
       if (liveModeActive) startLiveListening(); // mic back ON only after the AI finishes speaking
     };
-    utterance.onerror = () => {
-      isLiveSpeaking = false;
-      if (liveModeActive) startLiveListening();
-    };
+
+    const cleanText = stripMarkdownForSpeech(text);
+    const usedGemini = await speakWithGemini(cleanText, null, onDone);
+    if (usedGemini) return;
+
+    if (!liveModeActive) return; // live mode might have been stopped during the await
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.lang = detectSpeechLang(text); // speaks in the reply's actual script; won't force-mispronounce, and won't drift by accident
+    utterance.onend = onDone;
+    utterance.onerror = onDone;
     window.speechSynthesis.speak(utterance);
   }
 
@@ -1716,23 +1834,30 @@
         }).catch(() => {});
       });
 
-      speakBtn.addEventListener('click', () => {
-        if (!('speechSynthesis' in window)) return;
+      speakBtn.addEventListener('click', async () => {
         const text = stripMarkdownForSpeech(row.querySelector('.msg-text').textContent || '');
         if (!text) return;
 
         if (speakBtn.classList.contains('speaking')) {
           window.speechSynthesis.cancel();
+          stopGeminiVoice();
           speakBtn.classList.remove('speaking');
           return;
         }
 
         window.speechSynthesis.cancel();
+        stopGeminiVoice();
+        speakBtn.classList.add('speaking');
+
+        const onDone = () => speakBtn.classList.remove('speaking');
+        const usedGemini = await speakWithGemini(text, null, onDone);
+        if (usedGemini) return;
+
+        if (!('speechSynthesis' in window)) { onDone(); return; }
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = detectSpeechLang(text);
-        utterance.onend = () => speakBtn.classList.remove('speaking');
-        utterance.onerror = () => speakBtn.classList.remove('speaking');
-        speakBtn.classList.add('speaking');
+        utterance.onend = onDone;
+        utterance.onerror = onDone;
         window.speechSynthesis.speak(utterance);
       });
 
@@ -1806,6 +1931,17 @@
      syntax (keeping the wrapped content) before anything is handed to
      SpeechSynthesisUtterance, for both the per-message speaker button
      and live voice conversation mode. */
+  const SPEECH_DIGIT_WORDS = ['zero','one','two','three','four','five','six','seven','eight','nine'];
+
+  function expandDigitsForSpeech(text) {
+    // Long digit runs (phone numbers, codes) get spelled out digit-by-digit
+    // with the word "zero" (never "oh") so the TTS engine reads them
+    // clearly instead of as one huge number or misreading 0 as the letter O.
+    return (text || '').replace(/\d{5,}/g, (match) =>
+      match.split('').map(d => SPEECH_DIGIT_WORDS[+d]).join(' ')
+    );
+  }
+
   function stripMarkdownForSpeech(text) {
     let plain = text || '';
 
@@ -1818,6 +1954,8 @@
     plain = plain.replace(/^\s{0,3}#{1,6}\s+/gm, '');                       // markdown headers
     plain = plain.replace(/^\s*[-*+]\s+/gm, '');                            // bullet markers
     plain = plain.replace(/[*_~`#]/g, '');                                  // any leftover stray symbols
+
+    plain = expandDigitsForSpeech(plain);
 
     return plain.trim();
   }
