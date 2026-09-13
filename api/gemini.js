@@ -21,7 +21,10 @@ const SYSTEM_INSTRUCTION = {
       'If a customer asks about ordering or delivery without specifying branch, reply: "Al Hail branch: 79007040 | Al Khuwair branch: 96796783"\n\n' +
 
       'CONTEXT MEMORY — IMPORTANT:\n' +
-      'Always read the full conversation history before replying. If the user sent a short follow-up (a number, "yes", "ok", a quantity), look at the previous message to understand what item or topic they are referring to. Never reply as if the message is out of context.\n\n' +
+      'Always read the full conversation history before replying. If the user sent a short follow-up like "price please", "how much", "price?", look at the previous message to understand what item they are asking about and give the price. Never reply as if the message is out of context.\n\n' +
+
+      'PRICE LIST:\n' +
+      'If a customer asks for a "price list", "full menu", "menu please", or "what do you have", show the full menu with prices category by category. Do not refuse this request.\n\n' +
 
       'QUANTITY CALCULATION:\n' +
       'If a user sends just a number (e.g. "5", "19", "10") after asking about an item, treat it as a quantity. Calculate: quantity x unit price. If total >= 1000 Baisa, also show in Rials. Example: 5 x 200 Baisa = 1000 Baisa (1 Rial).\n' +
@@ -231,4 +234,4 @@ export default async function handler(req, res) {
 export const config = {
   api: { bodyParser: { sizeLimit: '8mb' } }
 };
-      
+    
