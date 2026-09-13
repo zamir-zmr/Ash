@@ -1284,8 +1284,7 @@
   let liveUtteranceBuffer = '';
   let liveResultCursor = 0;
   let liveSilenceTimer = null;
-  const LIVE_SILENCE_MS = 1100; // pause length that counts as "user finished talking"
-  const LIVE_STOP_WORDS = ['ruko ruko', 'ruk jao', 'ruko', 'stop stop', 'stop', 'bas ruko', 'chup ho jao', 'wait wait'];
+  const LIVE_SILENCE_MS = 1100; // pause length that counts as "user   const LIVE_STOP_WORDS = ['ruko ruko', 'ruk jao', 'ruko', 'stop stop', 'stop', 'bas ruko', 'chup ho jao', 'wait wait'];
   const LIVE_GREETING = 'Hi! Please speak, I am listening.';
 
   function containsStopWord(text) {
@@ -1299,10 +1298,15 @@
     liveUtteranceBuffer = '';
 
     if (finished && !containsStopWord(finished)) {
+      // Mic OFF the instant we treat this as a complete utterance — not
+      // just when the AI starts talking. Otherwise the mic kept listening
+      // (and could pick up background noise) all through the time the AI
+      // is still "thinking", which is not properly muted/inactive.
+      stopLiveListeningForSpeech();
       userInput.value = finished;
       if (chatForm.requestSubmit) chatForm.requestSubmit();
       else chatForm.dispatchEvent(new Event('submit', { cancelable: true }));
-      return; // mic stays off; startLiveListening() resumes it once the AI finishes speaking
+      return; // mic stays off; startLiveListening() resumes it only once the AI finishes speaking
     }
     // Nothing usable was said (silence/noise) — the SAME recognizer keeps
     // running underneath, so the mic just keeps listening quietly. No
@@ -1451,11 +1455,11 @@
     else startLiveMode();
   });
 
-  function detectSpeechLang(text) {
-    if (/[\u0600-\u06FF]/.test(text)) return 'ar-SA';   // Arabic script
-    if (/[\u0900-\u097F]/.test(text)) return 'hi-IN';   // Devanagari script
-    return 'en-IN';                                     // English / Hinglish (Roman script)
-  }
+  // Fixed speech language for the browser-voice ("System voice") fallback.
+  // This is intentionally a constant, not detected per-message — dynamically
+  // switching it based on each reply's script was what made the voice sound
+  // like it was randomly changing. It only ever changes if you edit this line.
+  const FIXED_SPEECH_LANG = 'en-IN';
 
   /* ---------------- Gemini voice (Ursa, etc.) playback ----------------
      Gemini's TTS returns raw 16-bit PCM audio (no file header), so we
@@ -1561,7 +1565,7 @@
 
     if (!liveModeActive) return; // live mode might have been stopped during the await
     const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.lang = detectSpeechLang(text); // speaks in the reply's actual script; won't force-mispronounce, and won't drift by accident
+    utterance.lang = FIXED_SPEECH_LANG; // constant — never auto-switches, so the voice doesn't sound like it's randomly changing
     utterance.onend = onDone;
     utterance.onerror = onDone;
     window.speechSynthesis.speak(utterance);
@@ -1923,7 +1927,7 @@
 
         if (!('speechSynthesis' in window)) { onDone(); return; }
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = detectSpeechLang(text);
+        utterance.lang = FIXED_SPEECH_LANG;
         utterance.onend = onDone;
         utterance.onerror = onDone;
         window.speechSynthesis.speak(utterance);
