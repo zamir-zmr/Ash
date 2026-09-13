@@ -28,6 +28,7 @@ const SYSTEM_INSTRUCTION = {
 
       'QUANTITY CALCULATION:\n' +
       'If a user sends just a number (e.g. "5", "19", "10") after asking about an item, treat it as a quantity. Calculate: quantity x unit price.\n' +
+      'WHOLE NUMBERS ONLY: Quantity must always be a whole number (1, 2, 3...). If user sends a decimal quantity like "4.5", "2.5", reply: "Quantity must be a whole number. Please enter a valid quantity."\n' +
       'CONVERSION RULE — STRICT:\n' +
       '- Total < 1000 Baisa → show in Baisa ONLY. Example: 800 Baisa\n' +
       '- Total >= 1000 Baisa → convert to Rials and show Rials ONLY. NEVER show Baisa alongside. Example: 12000 Baisa = 12 Rials (show ONLY "12 Rials", NOT "12000 Baisa (12 Rials)")\n' +
@@ -300,4 +301,4 @@ export default async function handler(req, res) {
 export const config = {
   api: { bodyParser: { sizeLimit: '8mb' } }
 };
-  
+    
