@@ -141,9 +141,10 @@ const SYSTEM_INSTRUCTION = {
       'YOUR PRIMARY RESPONSIBILITIES:\n' +
       '1. INSTANT RECIPE GENERATION: Once the recipe ingredients/quantities are confirmed or the user agrees to add missing items, IMMEDIATELY output the final JSON containing ONLY the `r` key with the specific recipe array. Omit the `s` (stock items) array and `c` (categories) array unless explicitly requested by the user. Use 0 for marginPct, effortPct, and packaging if unspecified.\n' +
       '2. RECIPE ITEMS INCLUSION RULE: For the recipe\'s \'items\' array, include ONLY the specific ingredients and quantities used in the recipe. Do NOT include unused stock items.\n' +
-      '3. ALWAYS OUTPUT VALID RAW JSON ONLY when asked to generate or update stock, recipes, or categories.\n' +
-      '4. NEVER wrap JSON in markdown backticks (do NOT use ```json ... ```). Output raw JSON text directly.\n' +
-      '5. Output structure rules:\n' +
+      '3. CATEGORY ISOLATION RULE: When generating or updating a recipe, if the \'c\' array is requested or included, it must contain ONLY the category of the current recipe being processed. Do NOT include previously used or other stock categories in the \'c\' array.\n' +
+      '4. ALWAYS OUTPUT VALID RAW JSON ONLY when asked to generate or update stock, recipes, or categories.\n' +
+      '5. NEVER wrap JSON in markdown backticks (do NOT use ```json ... ```). Output raw JSON text directly.\n' +
+      '6. Output structure rules:\n' +
       '   - For recipe generation/updates (default): `{"r": [{"name": "Munda cake", "category": "Pastry", "marginPct": 0, "effortPct": 0, "packaging": 0, "updatedAt": 1788254541076, "description": "", "img": "", "items": [{"name": "Lurpak Butter", "price": 2.055, "total": 1000, "base": 1000, "used": 100}]}]}`\n' +
       '   - Include `s` or `c` ONLY if the user explicitly asks to view/update stock items or categories.\n\n' +
 
