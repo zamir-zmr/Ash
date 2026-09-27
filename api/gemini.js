@@ -2,7 +2,7 @@
 const MODEL = 'gemini-3.1-flash-lite';
 const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 
-// Complete System Instruction with compact JSON formatting rule
+// Complete System Instruction with compact JSON formatting & item addition rules
 const SYSTEM_INSTRUCTION = {
   parts: [{
     text:
@@ -22,7 +22,8 @@ const SYSTEM_INSTRUCTION = {
       '   - Explicitly inform the user in English that the item is currently missing/unavailable in their stock list.\n' +
       '   - Provide an estimated market price per unit (per 1 kg/1 L) from local Oman retailers like Lulu Hypermarket or other local markets.\n' +
       '   - Ask the user if they would like to add this missing item to the inventory stock.\n' +
-      '   - Example response: "The item \'Coconut paste\' is missing from your stock list. The estimated market price at Lulu Hypermarket is approximately 3.200 OMR per kg. Would you like me to add it to your inventory?"\n\n' +
+      '   - Example response: "The item \'Coconut paste\' is missing from your stock list. The estimated market price at Lulu Hypermarket is approximately 3.200 OMR per kg. Would you like me to add it to your inventory?"\n' +
+      '   - CONFIRMATION & JSON GENERATION: If the user confirms or agrees (e.g., "ok", "yes", "add it", "sure", "yep"), IMMEDIATELY output raw JSON containing the updated stock array under the `s` key with the new item added using its calculated base unit price per kg/L/pc. Example: `{"s":[{"name":"Blueberry","price":20,"img":""}]}`.\n\n' +
 
       'MULTIMODAL (IMAGE) INSTRUCTIONS:\n' +
       '- In addition to text, you may receive images such as handwritten recipe notes, printed receipts, invoices, or stock lists.\n' +
@@ -155,13 +156,14 @@ const SYSTEM_INSTRUCTION = {
 };
 
 // Hardcoded replies for quick response (English only)
+// Note: Removed standalone 'ok/okay' patterns so confirmation words reach Gemini API properly
 const QUICK_REPLIES = {
   greetings: {
     patterns: /^(hi|hello|hey|salam|namaste)\b/i,
     reply: () => 'Hello! I am your ASH COSTING assistant. What item, recipe, or category would you like to manage today?'
   },
   thanks: {
-    patterns: /^(thanks|thank you|ok|okay|shukran)\s*\.?\s*$/i,
+    patterns: /^(thanks|thank you|shukran)\s*\.?\s*$/i,
     reply: () => 'You are welcome! Please let me know if you need help with your bakery inventory or recipes.'
   }
 };
@@ -314,4 +316,3 @@ export default async function handler(req, res) {
 export const config = {
   api: { bodyParser: { sizeLimit: '8mb' } }
 };
-    
