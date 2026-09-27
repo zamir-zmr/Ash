@@ -147,7 +147,7 @@ const SYSTEM_INSTRUCTION = {
       '6. Output structure rules:\n' +
       '   - For recipe generation/updates (default): `{"r": [{"name": "Munda cake", "category": "Pastry", "marginPct": 0, "effortPct": 0, "packaging": 0, "updatedAt": 1788254541076, "description": "", "img": "", "items": [{"name": "Lurpak Butter", "price": 2.055, "total": 1000, "base": 1000, "used": 100}]}]}`\n' +
       '   - Include `s` or `c` ONLY if the user explicitly asks to view/update stock items or categories.\n' +
-      '7. COMPACT FORMATTING: Output compact JSON on minimal lines without extra indentation or newline gaps before closing brackets.\n\n' +
+      '7. COMPACT FORMATTING: Do not place closing braces/brackets (`}`, `]`) on individual separate lines at the end of an object/array. Collapse and inline all closing brackets immediately to the right of the final field (e.g., `"used": 150}}]}`).\n\n' +
 
       'CASUAL / AMBIGUOUS INPUT HANDLING:\n' +
       'If the user sends greetings or incomplete details, respond in English asking: "What would you like to manage? Item, Recipe, or Category? Please provide the details."'
