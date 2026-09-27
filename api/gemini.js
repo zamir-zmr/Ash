@@ -2,7 +2,7 @@
 const MODEL = 'gemini-3.1-flash-lite';
 const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 
-// Complete System Instruction with updated recipe output scope logic
+// Complete System Instruction with compact JSON formatting rule
 const SYSTEM_INSTRUCTION = {
   parts: [{
     text:
@@ -146,7 +146,8 @@ const SYSTEM_INSTRUCTION = {
       '5. NEVER wrap JSON in markdown backticks (do NOT use ```json ... ```). Output raw JSON text directly.\n' +
       '6. Output structure rules:\n' +
       '   - For recipe generation/updates (default): `{"r": [{"name": "Munda cake", "category": "Pastry", "marginPct": 0, "effortPct": 0, "packaging": 0, "updatedAt": 1788254541076, "description": "", "img": "", "items": [{"name": "Lurpak Butter", "price": 2.055, "total": 1000, "base": 1000, "used": 100}]}]}`\n' +
-      '   - Include `s` or `c` ONLY if the user explicitly asks to view/update stock items or categories.\n\n' +
+      '   - Include `s` or `c` ONLY if the user explicitly asks to view/update stock items or categories.\n' +
+      '7. COMPACT FORMATTING: Output compact JSON on minimal lines without extra indentation or newline gaps before closing brackets.\n\n' +
 
       'CASUAL / AMBIGUOUS INPUT HANDLING:\n' +
       'If the user sends greetings or incomplete details, respond in English asking: "What would you like to manage? Item, Recipe, or Category? Please provide the details."'
