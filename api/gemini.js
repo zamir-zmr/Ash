@@ -2,7 +2,7 @@
 const MODEL = 'gemini-3.1-flash-lite';
 const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 
-// Complete System Instruction with strict single-item delta JSON rule
+// Complete System Instruction with strict JSON & confirmation context rules
 const SYSTEM_INSTRUCTION = {
   parts: [{
     text:
@@ -24,9 +24,9 @@ const SYSTEM_INSTRUCTION = {
       '   - Ask the user if they would like to add this missing item to the inventory stock.\n' +
       '   - Example response: "The item \'Coconut paste\' is missing from your stock list. The estimated market price at Lulu Hypermarket is approximately 3.200 OMR per kg. Would you like me to add it to your inventory?"\n' +
       '   - CONFIRMATION & JSON GENERATION:\n' +
-      '     * If the user confirms/agrees (e.g., "ok", "yes", "add it", "sure", "yep"), IMMEDIATELY output raw JSON containing ONLY the new item inside the `s` array.\n' +
-      '     * STRICT SINGLE ITEM ISOLATION RULE FOR STOCK: NEVER output the entire default/existing stock list when adding or updating items. Include ONLY the newly added or updated item(s) in the `s` array.\n' +
-      '     * Example output when adding Blueberry: `{"s":[{"name":"Blueberry","price":20,"img":""}]}`\n\n' +
+      '     * If the user confirms/agrees to add the item (e.g., "ok", "yes", "add it", "sure", "yep", "okay"), IMMEDIATELY output raw JSON containing ONLY the newly added item inside the `s` array.\n' +
+      '     * STRICT SINGLE ITEM ISOLATION RULE FOR STOCK: NEVER output the entire default/existing stock list when adding or updating missing items. Include ONLY the newly added or updated item(s) in the `s` array.\n' +
+      '     * Example output when user says "Yes" for Blueberry: `{"s":[{"name":"Blueberry","price":20,"img":""}]}`\n\n' +
 
       'MULTIMODAL (IMAGE) INSTRUCTIONS:\n' +
       '- In addition to text, you may receive images such as handwritten recipe notes, printed receipts, invoices, or stock lists.\n' +
@@ -157,18 +157,6 @@ const SYSTEM_INSTRUCTION = {
   }]
 };
 
-// Hardcoded replies for quick response (English only)
-const QUICK_REPLIES = {
-  greetings: {
-    patterns: /^(hi|hello|hey|salam|namaste)\b/i,
-    reply: () => 'Hello! I am your ASH COSTING assistant. What item, recipe, or category would you like to manage today?'
-  },
-  thanks: {
-    patterns: /^(thanks|thank you|shukran)\s*\.?\s*$/i,
-    reply: () => 'You are welcome! Please let me know if you need help with your bakery inventory or recipes.'
-  }
-};
-
 async function handleTTS(req, res, apiKey) {
   const { text, voice } = req.body || {};
   if (!text) {
@@ -251,27 +239,6 @@ export default async function handler(req, res) {
   if (!contents) {
     res.status(400).json({ error: { message: 'Missing "contents" in request body' } });
     return;
-  }
-
-  const lastMsg = contents?.slice(-1)?.[0];
-  const lastText = lastMsg?.parts?.map(p => p.text || '').join(' ').trim() || '';
-  const lastHasImage = !!(lastMsg?.parts || []).find(p => p.inline_data || p.inlineData);
-
-  // Quick replies only apply to plain greeting/thanks text turns
-  if (!lastHasImage) {
-    for (const key of Object.keys(QUICK_REPLIES)) {
-      const rule = QUICK_REPLIES[key];
-      if (rule.patterns.test(lastText)) {
-        const replyText = rule.reply();
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache, no-transform');
-        res.setHeader('Connection', 'keep-alive');
-        const chunk = JSON.stringify({ candidates: [{ content: { parts: [{ text: replyText }] } }] });
-        res.write(`data: ${chunk}\n\n`);
-        res.end();
-        return;
-      }
-    }
   }
 
   const upstreamUrl = `https://generativelanguage.googleapis.com/v1/models/${MODEL}:streamGenerateContent?alt=sse&key=${apiKey}`;
