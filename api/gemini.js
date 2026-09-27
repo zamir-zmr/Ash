@@ -170,6 +170,97 @@ const SYSTEM_INSTRUCTION = {
   }]
 };
 
+// ---------------------------------------------------------------------------
+// DYNAMIC GROUND-TRUTH EXTRACTION
+// The small/lite model sometimes fails to track which item was actually
+// discussed and repeats an older item name from earlier in the chat (or even
+// from the instructions' own examples). To make this bulletproof, we
+// programmatically scan the real conversation history sent by the client and
+// extract the EXACT missing-item name/price and the EXACT original recipe
+// request text ourselves — then hand those facts to the model as a
+// non-negotiable "ground truth" instruction for this turn only. This removes
+// the model's need to "remember" anything; it just has to obey the facts we
+// give it.
+// ---------------------------------------------------------------------------
+
+function getTurnText(turn) {
+  if (!turn || !Array.isArray(turn.parts)) return '';
+  return turn.parts.map(p => (p && typeof p.text === 'string') ? p.text : '').join(' ').trim();
+}
+
+const CONFIRM_REGEX = /^\s*(yes|ok(ay)?|sure|yep|yeah|add it|please add|go ahead|confirm(ed)?)\b/i;
+const MISSING_ITEM_REGEX = /item\s+'([^']+)'\s+is\s+missing\s+from\s+your\s+stock\s+list[\s\S]*?approximately\s*([\d.]+)\s*OMR\s*per\s*(kg|l|unit)/i;
+const RECIPE_REQUEST_REGEX = /add\s+recipe/i;
+
+function extractGroundTruth(contents) {
+  if (!Array.isArray(contents) || contents.length === 0) return null;
+
+  const lastTurn = contents[contents.length - 1];
+  if (!lastTurn || lastTurn.role !== 'user') return null;
+
+  const lastText = getTurnText(lastTurn);
+  if (!CONFIRM_REGEX.test(lastText)) return null;
+
+  let missingItemName = null;
+  let missingPrice = null;
+  let missingUnit = null;
+  let recipeRequestText = null;
+
+  // Walk backwards from just before the confirmation message.
+  for (let i = contents.length - 2; i >= 0; i--) {
+    const turn = contents[i];
+    const text = getTurnText(turn);
+
+    if (!missingItemName && turn.role === 'model') {
+      const match = text.match(MISSING_ITEM_REGEX);
+      if (match) {
+        missingItemName = match[1];
+        missingPrice = parseFloat(match[2]);
+        missingUnit = match[3].toLowerCase();
+        continue; // keep walking backwards to find the recipe request, if any
+      }
+    }
+
+    if (missingItemName && turn.role === 'user' && RECIPE_REQUEST_REGEX.test(text)) {
+      recipeRequestText = text;
+      break; // found the original recipe request; stop scanning
+    }
+
+    // Stop scanning once we've gone far enough back that further turns are
+    // unlikely to be relevant (keeps this cheap and avoids grabbing an even
+    // older, unrelated recipe request).
+    if (missingItemName && i <= contents.length - 6) break;
+  }
+
+  if (!missingItemName) return null;
+
+  return { missingItemName, missingPrice, missingUnit, recipeRequestText };
+}
+
+function buildSystemInstructionForTurn(contents) {
+  const ground = extractGroundTruth(contents);
+  if (!ground) return SYSTEM_INSTRUCTION;
+
+  const { missingItemName, missingPrice, missingUnit, recipeRequestText } = ground;
+
+  let directive =
+    '\n\nCURRENT TURN GROUND TRUTH (PROGRAMMATICALLY EXTRACTED FROM THE ACTUAL CONVERSATION — ' +
+    'THIS OVERRIDES ANY EXAMPLE, PLACEHOLDER, OR OLDER ITEM NAME MENTIONED ANYWHERE ELSE IN THESE INSTRUCTIONS):\n' +
+    `The user just confirmed adding the missing item. Its name is EXACTLY "${missingItemName}" ` +
+    `and its price is EXACTLY ${isNaN(missingPrice) ? missingPrice : missingPrice} (per ${missingUnit || 'kg'}). ` +
+    `Your \`s\` array for this response MUST be exactly: {"s":[{"name":"${missingItemName}","price":${isNaN(missingPrice) ? 0 : missingPrice},"img":""}]} ` +
+    'and MUST NOT contain any other item name.';
+
+  if (recipeRequestText) {
+    directive +=
+      ` The user's original recipe request in this same exchange was exactly: "${recipeRequestText}". ` +
+      `You MUST also build the \`r\` array recipe from THIS exact text (its name, category, and items), ` +
+      `using "${missingItemName}" as the ingredient that was missing. Include both \`s\` and \`r\` in the same JSON response — do not drop the recipe.`;
+  }
+
+  return { parts: [{ text: SYSTEM_INSTRUCTION.parts[0].text + directive }] };
+}
+
 async function handleTTS(req, res, apiKey) {
   const { text, voice } = req.body || {};
   if (!text) {
@@ -213,88 +304,4 @@ async function handleTTS(req, res, apiKey) {
 
   let data;
   try {
-    data = await ttsResponse.json();
-  } catch (err) {
-    res.status(502).json({ error: { message: 'Invalid TTS response from Gemini' } });
-    return;
-  }
-
-  const audioPart = data?.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-  const audioBase64 = audioPart?.inlineData?.data;
-  const mimeType = audioPart?.inlineData?.mimeType || 'audio/L16;rate=24000';
-
-  if (!audioBase64) {
-    res.status(502).json({ error: { message: 'No audio returned from Gemini TTS' } });
-    return;
-  }
-
-  res.status(200).json({ audioBase64, mimeType });
-}
-
-export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    res.status(405).json({ error: { message: 'Method not allowed' } });
-    return;
-  }
-
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    res.status(500).json({ error: { message: 'Server misconfigured: GEMINI_API_KEY missing' } });
-    return;
-  }
-
-  if (req.body && req.body.action === 'tts') {
-    await handleTTS(req, res, apiKey);
-    return;
-  }
-
-  const { contents } = req.body || {};
-  if (!contents) {
-    res.status(400).json({ error: { message: 'Missing "contents" in request body' } });
-    return;
-  }
-
-  const upstreamUrl = `https://generativelanguage.googleapis.com/v1/models/${MODEL}:streamGenerateContent?alt=sse&key=${apiKey}`;
-
-  let upstreamResponse;
-  try {
-    upstreamResponse = await fetch(upstreamUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents, systemInstruction: SYSTEM_INSTRUCTION })
-    });
-  } catch (err) {
-    res.status(502).json({ error: { message: 'Failed to reach Gemini API', detail: err.message } });
-    return;
-  }
-
-  if (!upstreamResponse.ok || !upstreamResponse.body) {
-    let detail = null;
-    try { detail = await upstreamResponse.json(); } catch (_) {}
-    res.status(upstreamResponse.status).json({
-      error: { message: detail?.error?.message || `Gemini API error: ${upstreamResponse.status}` }
-    });
-    return;
-  }
-
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache, no-transform');
-  res.setHeader('Connection', 'keep-alive');
-
-  const reader = upstreamResponse.body.getReader();
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      res.write(value);
-    }
-  } catch (err) {}
-  finally {
-    res.end();
-  }
-}
-
-export const config = {
-  api: { bodyParser: { sizeLimit: '8mb' } }
-};
-      
+    data = await ttsResp
