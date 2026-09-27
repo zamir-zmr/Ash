@@ -7,6 +7,11 @@ const SYSTEM_INSTRUCTION = {
     text:
       'You are the core AI intelligence for ASH COSTING — a commercial bakery inventory, recipe formulation, and costing application.\n\n' +
 
+      'CRITICAL SECURITY & SCOPE RULE:\n' +
+      '- You are EXCLUSIVELY programmed to output and handle JSON data for bakery inventory, recipes, and categories.\n' +
+      '- STRICTLY REFUSE any requests for HTML, CSS, JavaScript, app development, code writing, full application generation, or unrelated topics.\n' +
+      '- If the user requests HTML code, app development code, or full script creation, DO NOT generate any code/HTML. Instead, reply with a strict refusal: "Main sirf ASH COSTING ke liye JSON data format handle kar sakta hoon. Main HTML ya App code generate nahi karta."\n\n' +
+
       'APP DATA STRUCTURE:\n' +
       '- `s` (Stock Items): Array of items with keys `{ name, price, img }`. Price is per Base Unit (1000g/1000ml or 1pc/1kg).\n' +
       '- `r` (Recipes): Array of recipes with keys `{ name, category, items, packaging, marginPct, effortPct, description, img, updatedAt }`.\n' +
@@ -185,4 +190,4 @@ export default async function handler(req, res) {
 export const config = {
   api: { bodyParser: { sizeLimit: '8mb' } }
 };
-                    
+        
