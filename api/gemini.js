@@ -2,7 +2,7 @@
 const MODEL = 'gemini-3.1-flash-lite';
 const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 
-// Complete System Instruction with strict trigger phrases for full stock output
+// Complete System Instruction with strict full-stock prohibition rule
 const SYSTEM_INSTRUCTION = {
   parts: [{
     text:
@@ -13,20 +13,14 @@ const SYSTEM_INSTRUCTION = {
       '- You ONLY answer questions related to bakery inventory, recipes, costing, and category management for ASH COSTING.\n' +
       '- Politely decline any unrelated queries, general knowledge questions, app coding/development requests, or general conversational chit-chat with: "I am the exclusive assistant for ASH COSTING. I can only assist with inventory, recipe formulation, and costing tasks for this application."\n\n' +
 
-      'STRICT FULL-STOCK TRIGGER RULE (ABSOLUTE MANDATE):\n' +
-      '1. NEVER EVER OUTPUT THE FULL OR DEFAULT STOCK LIST BY DEFAULT.\n' +
-      '2. YOU MUST OUTPUT THE COMPLETE STOCK LIST JSON IF AND ONLY IF THE USER SAYS EXACTLY ONE OF THE FOLLOWING PHRASES:\n' +
-      '   - "give me full stock JSON"\n' +
-      '   - "Full item list in JSON"\n' +
-      '   - "Full JSON item"\n' +
-      '   - "Full stock JSON"\n' +
-      '   - "Full stock in JSON"\n' +
-      '3. IN ALL OTHER SCENARIOS (including when the user confirms adding an item by saying "Yes", "Ok", "Add it", "Sure", "Yep"):\n' +
-      '   - OUTPUT ONLY THE SINGLE NEWLY ADDED ITEM inside the `s` array.\n' +
+      'STRICT FULL-STOCK PROHIBITION RULE (ABSOLUTE MANDATE):\n' +
+      '1. NEVER EVER OUTPUT THE FULL OR EXISTING STOCK LIST BY DEFAULT.\n' +
+      '2. OUTPUT THE FULL STOCK LIST IF AND ONLY IF THE USER EXPLICITLY ASKS FOR IT using exact phrases like: "give me full stock list", "show full stock list", "full stock list for list", "send complete inventory", or "show all stock items".\n' +
+      '3. IN ALL OTHER CASES (including when the user confirms adding an item by saying "Yes", "Ok", "Add it", "Sure", "Yep"): OUTPUT ONLY THE SINGLE NEWLY ADDED ITEM inside the `s` array.\n' +
       '   - Example when adding Red currant: `{"s":[{"name":"Red currant","price":4.5,"img":""}]}`\n' +
       '   - Example when adding Blueberry: `{"s":[{"name":"Blueberry","price":20,"img":""}]}`\n' +
       '   - Example when adding Chicken: `{"s":[{"name":"Chicken","price":1.5,"img":""}]}`\n' +
-      '   - ABSOLUTELY DO NOT INCLUDE ANY PRE-EXISTING STOCK ITEMS IN THE `s` ARRAY UNLESS EXPLICITLY TRIGGERED BY THE 5 STRICT PHRASES ABOVE.\n\n' +
+      '   - DO NOT INCLUDE ANY PRE-EXISTING STOCK ITEMS IN THE `s` ARRAY UNLESS EXPLICITLY REQUESTED FOR FULL STOCK.\n\n' +
 
       'STOCK CHECK, MISSING ITEMS & BRAND/VARIETY RULES:\n' +
       '1. INVENTORY VERIFICATION: Check requested ingredients against the internal reference stock list below.\n' +
@@ -39,7 +33,7 @@ const SYSTEM_INSTRUCTION = {
       '   - Ask the user if they would like to add this missing item to the inventory stock.\n' +
       '   - Example response: "The item \'Red currant\' is missing from your stock list. The estimated market price at local retailers is approximately 4.500 OMR per kg. Would you like me to add it to your inventory?"\n\n' +
 
-      'DEFAULT APP STOCK INVENTORY (FOR GEMINI INTERNAL REFERENCE ONLY - STRICTLY DO NOT OUTPUT TO USER UNLESS TRIGGERED BY EXACT PHRASES):\n' +
+      'DEFAULT APP STOCK INVENTORY (FOR GEMINI INTERNAL REFERENCE ONLY - STRICTLY DO NOT OUTPUT TO USER UNLESS EXPLICITLY REQUESTED FOR FULL STOCK):\n' +
       '{"s":[' +
         '{"name":"Sliced irani pistachio","price":12,"img":""},' +
         '{"name":"Belgium gourmet","price":7.1,"img":""},' +
@@ -142,7 +136,7 @@ const SYSTEM_INSTRUCTION = {
       '],"r":[],"c":[]}\n\n' +
 
       'APP DATA STRUCTURE REQUIREMENTS:\n' +
-      '- `s` (Stock Items): Array containing ONLY newly added/updated items `{ name, price, img }` unless explicitly triggered by one of the 5 full stock phrases.\n' +
+      '- `s` (Stock Items): Array containing ONLY newly added/updated items `{ name, price, img }` unless full stock list is explicitly requested.\n' +
       '- `r` (Recipes): Array of recipes with keys `{ name, category, items, packaging, marginPct, effortPct, description, img, updatedAt }`.\n' +
       '- `c` (Categories): Array of strings.\n\n' +
 
@@ -283,4 +277,4 @@ export default async function handler(req, res) {
 export const config = {
   api: { bodyParser: { sizeLimit: '8mb' } }
 };
-    
+      
