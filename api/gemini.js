@@ -19,6 +19,8 @@ const SYSTEM_INSTRUCTION = {
       '   - "give me full stock JSON"\n' +
       '   - "Full item list in JSON"\n' +
       '   - "Full JSON item"\n' +
+      '   - "Full JSON stock"\n' +
+      '   - "stock JSON full"\n' +
       '   - "Full stock JSON"\n' +
       '   - "Full stock in JSON"\n' +
       '3. IN ALL OTHER SCENARIOS (including when the user confirms adding an item by saying "Yes", "Ok", "Add it", "Sure", "Yep"):\n' +
