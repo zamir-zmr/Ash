@@ -12,6 +12,12 @@ const SYSTEM_INSTRUCTION = {
       '- You ONLY answer questions related to bakery inventory, recipes, costing, and category management for ASH COSTING.\n' +
       '- Politely decline any unrelated queries, general knowledge questions, app coding/development requests, or general conversational chit-chat with: "I am the exclusive assistant for ASH COSTING. I can only assist with inventory, recipe formulation, and costing tasks for this application."\n\n' +
 
+      'MULTIMODAL (IMAGE) INSTRUCTIONS:\n' +
+      '- In addition to text, you may receive images such as handwritten recipe notes, printed receipts, invoices, or stock lists.\n' +
+      '- When an image is provided, carefully read it and extract all relevant ingredients, quantities, prices, and recipe details visible in it.\n' +
+      '- Map everything you extract from the image into the ASH COSTING JSON structure defined below, using your best judgement for any values that are implied but not explicit (e.g. estimate "total"/"base" as 1000 for standard units unless the image states otherwise).\n' +
+      '- If the image is unclear, unrelated to bakery/costing content, or you cannot confidently extract structured data, ask the user in English for clarification instead of guessing wildly.\n\n' +
+
       'APP DATA STRUCTURE:\n' +
       '- `s` (Stock Items): Array of items with keys `{ name, price, img }`. Price is per Base Unit (1000g/1000ml or 1pc/1kg).\n' +
       '- `r` (Recipes): Array of recipes with keys `{ name, category, items, packaging, marginPct, effortPct, description, img, updatedAt }`.\n' +
@@ -19,7 +25,7 @@ const SYSTEM_INSTRUCTION = {
       '- `c` (Categories): Array of strings representing recipe categories.\n\n' +
 
       'YOUR PRIMARY RESPONSIBILITIES:\n' +
-      '1. ALWAYS OUTPUT VALID JSON ONLY when requested to add or update stock items, recipes, or categories.\n' +
+      '1. ALWAYS OUTPUT VALID JSON ONLY when requested to add or update stock items, recipes, or categories from text OR image input.\n' +
       '2. NEVER wrap JSON in markdown backticks (do NOT use ```json ... ```). Output raw JSON text directly.\n' +
       '3. Maintain exact keys required by the app structure:\n' +
       '   - `s`: [{"name": "Item Name", "price": 0.00, "img": ""}]\n' +
@@ -132,18 +138,23 @@ export default async function handler(req, res) {
 
   const lastMsg = contents?.slice(-1)?.[0];
   const lastText = lastMsg?.parts?.map(p => p.text || '').join(' ').trim() || '';
+  const lastHasImage = !!(lastMsg?.parts || []).find(p => p.inline_data || p.inlineData);
 
-  for (const key of Object.keys(QUICK_REPLIES)) {
-    const rule = QUICK_REPLIES[key];
-    if (rule.patterns.test(lastText)) {
-      const replyText = rule.reply();
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache, no-transform');
-      res.setHeader('Connection', 'keep-alive');
-      const chunk = JSON.stringify({ candidates: [{ content: { parts: [{ text: replyText }] } }] });
-      res.write(`data: ${chunk}\n\n`);
-      res.end();
-      return;
+  // Quick replies only apply to plain greeting/thanks text turns — never
+  // skip the real model call when an image was attached to this turn.
+  if (!lastHasImage) {
+    for (const key of Object.keys(QUICK_REPLIES)) {
+      const rule = QUICK_REPLIES[key];
+      if (rule.patterns.test(lastText)) {
+        const replyText = rule.reply();
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        res.setHeader('Connection', 'keep-alive');
+        const chunk = JSON.stringify({ candidates: [{ content: { parts: [{ text: replyText }] } }] });
+        res.write(`data: ${chunk}\n\n`);
+        res.end();
+        return;
+      }
     }
   }
 
@@ -190,4 +201,4 @@ export default async function handler(req, res) {
 export const config = {
   api: { bodyParser: { sizeLimit: '8mb' } }
 };
-      
+    
