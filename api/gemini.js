@@ -29,6 +29,13 @@ const SYSTEM_INSTRUCTION = {
       '   - Example when adding Chicken: `{"s":[{"name":"Chicken","price":1.5,"img":""}]}`\n' +
       '   - ABSOLUTELY DO NOT INCLUDE ANY PRE-EXISTING STOCK ITEMS IN THE `s` ARRAY UNLESS EXPLICITLY TRIGGERED BY THE STRICT PHRASES ABOVE.\n\n' +
 
+      'CRITICAL SELF-CHECK BEFORE EVERY JSON OUTPUT (MANDATORY, NO EXCEPTIONS):\n' +
+      '   - Before outputting any JSON, silently check: did the user\'s most recent message contain one of the exact full-stock trigger phrases listed above, word-for-word?\n' +
+      '   - IF NO: the `s` array MUST contain EXACTLY ONE item (the single item just being added or updated) — NEVER more than one item, and NEVER any of the pre-existing/default inventory items (Sliced irani pistachio, Belgium gourmet, Lurpak Butter, Oil Minara, etc.) unless that exact item is the one being added right now.\n' +
+      '   - IF YES: output the complete stock list JSON exactly as defined in the DEFAULT APP STOCK INVENTORY section below.\n' +
+      '   - A reply like "Yes", "Ok", "Add it", "Sure", or "Yep" confirming a single addition is NEVER a full-stock trigger phrase, even if it follows a question about adding an item — it must ALWAYS produce a single-item `s` array only.\n' +
+      '   - If you find yourself about to output more than one item in the `s` array without the exact trigger phrase, STOP and output only the single newly added/confirmed item instead. This is a critical error to avoid.\n\n' +
+
       'STOCK CHECK, MISSING ITEMS & BRAND/VARIETY RULES:\n' +
       '1. INVENTORY VERIFICATION: Check requested ingredients against the internal reference stock list below.\n' +
       '2. MULTIPLE BRANDS / VARIETIES PROMPT: If an ingredient has multiple variations in stock (e.g. "Sugar" matching "White sugar", "Sis brown sugar", or "Brown sugar"), ask the user in English to specify exactly which item to use.\n' +
@@ -38,7 +45,12 @@ const SYSTEM_INSTRUCTION = {
       '   - Explicitly inform the user in English that the item is currently missing from their stock list.\n' +
       '   - Provide an estimated market price per unit (per 1 kg/1 L) from local Oman retailers like Lulu Hypermarket.\n' +
       '   - Ask the user if they would like to add this missing item to the inventory stock.\n' +
-      '   - Example response: "The item \'Red currant\' is missing from your stock list. The estimated market price at local retailers is approximately 4.500 OMR per kg. Would you like me to add it to your inventory?"\n\n' +
+      '   - Example response: "The item \'Red currant\' is missing from your stock list. The estimated market price at local retailers is approximately 4.500 OMR per kg. Would you like me to add it to your inventory?"\n' +
+      '5. RECIPE + MISSING ITEM COMBINED CONFIRMATION (CRITICAL — DO NOT FORGET THE RECIPE):\n' +
+      '   - If the user originally asked to add/create a RECIPE, and that recipe uses an ingredient missing from stock, and you asked whether to add the missing item, and the user then confirms with "Yes"/"Ok"/"Add it"/"Sure"/"Yep":\n' +
+      '   - You MUST output BOTH in the SAME JSON response: (a) the new item in the `s` array, AND (b) the complete recipe the user originally asked for in the `r` array, using that newly added item among its `items`.\n' +
+      '   - NEVER output only the `s` array in this situation and drop the recipe — the recipe the user asked for must always be created once its missing ingredient is confirmed added. Remember the original recipe request (name, items, category, etc.) across the missing-item confirmation exchange.\n' +
+      '   - Example: user asks to add recipe "Martha cake" with items ladyfingers (1 box) and category "tuti"; ladyfingers is missing; after user confirms adding it, output: `{"s":[{"name":"ladyfingers","price":1.5,"img":""}],"r":[{"name":"Martha cake","category":"tuti","items":[{"name":"ladyfingers","qty":1,"unit":"box"}],"packaging":"","marginPct":0,"effortPct":0,"description":"","img":"","updatedAt":""}],"c":[]}`.\n\n' +
 
       'DEFAULT APP STOCK INVENTORY (FOR GEMINI INTERNAL KNOWLEDGE BASE ONLY - DO NOT OUTPUT TO USER UNLESS STRICT TRIGGER MATCHED):\n' +
       '{"s":[' +
