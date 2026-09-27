@@ -2,7 +2,7 @@
 const MODEL = 'gemini-3.1-flash-lite';
 const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 
-// Complete System Instruction with compact JSON formatting & item addition rules
+// Complete System Instruction with strict single-item delta JSON rule
 const SYSTEM_INSTRUCTION = {
   parts: [{
     text:
@@ -23,7 +23,10 @@ const SYSTEM_INSTRUCTION = {
       '   - Provide an estimated market price per unit (per 1 kg/1 L) from local Oman retailers like Lulu Hypermarket or other local markets.\n' +
       '   - Ask the user if they would like to add this missing item to the inventory stock.\n' +
       '   - Example response: "The item \'Coconut paste\' is missing from your stock list. The estimated market price at Lulu Hypermarket is approximately 3.200 OMR per kg. Would you like me to add it to your inventory?"\n' +
-      '   - CONFIRMATION & JSON GENERATION: If the user confirms or agrees (e.g., "ok", "yes", "add it", "sure", "yep"), IMMEDIATELY output raw JSON containing the updated stock array under the `s` key with the new item added using its calculated base unit price per kg/L/pc. Example: `{"s":[{"name":"Blueberry","price":20,"img":""}]}`.\n\n' +
+      '   - CONFIRMATION & JSON GENERATION:\n' +
+      '     * If the user confirms/agrees (e.g., "ok", "yes", "add it", "sure", "yep"), IMMEDIATELY output raw JSON containing ONLY the new item inside the `s` array.\n' +
+      '     * STRICT SINGLE ITEM ISOLATION RULE FOR STOCK: NEVER output the entire default/existing stock list when adding or updating items. Include ONLY the newly added or updated item(s) in the `s` array.\n' +
+      '     * Example output when adding Blueberry: `{"s":[{"name":"Blueberry","price":20,"img":""}]}`\n\n' +
 
       'MULTIMODAL (IMAGE) INSTRUCTIONS:\n' +
       '- In addition to text, you may receive images such as handwritten recipe notes, printed receipts, invoices, or stock lists.\n' +
@@ -31,7 +34,7 @@ const SYSTEM_INSTRUCTION = {
       '- Map everything extracted into the ASH COSTING JSON structure defined below.\n' +
       '- If the image is unclear or non-bakery related, ask the user in English for clarification.\n\n' +
 
-      'DEFAULT APP STOCK INVENTORY:\n' +
+      'DEFAULT APP STOCK INVENTORY (FOR YOUR REFERENCE ONLY):\n' +
       '{"s":[' +
         '{"name":"Sliced irani pistachio","price":12,"img":""},' +
         '{"name":"Belgium gourmet","price":7.1,"img":""},' +
@@ -140,15 +143,14 @@ const SYSTEM_INSTRUCTION = {
       '- `c` (Categories): Array of strings representing recipe categories.\n\n' +
 
       'YOUR PRIMARY RESPONSIBILITIES:\n' +
-      '1. INSTANT RECIPE GENERATION: Once the recipe ingredients/quantities are confirmed or the user agrees to add missing items, IMMEDIATELY output the final JSON containing ONLY the `r` key with the specific recipe array. Omit the `s` (stock items) array and `c` (categories) array unless explicitly requested by the user. Use 0 for marginPct, effortPct, and packaging if unspecified.\n' +
-      '2. RECIPE ITEMS INCLUSION RULE: For the recipe\'s \'items\' array, include ONLY the specific ingredients and quantities used in the recipe. Do NOT include unused stock items.\n' +
-      '3. CATEGORY ISOLATION RULE: When generating or updating a recipe, if the \'c\' array is requested or included, it must contain ONLY the category of the current recipe being processed. Do NOT include previously used or other stock categories in the \'c\' array.\n' +
+      '1. INSTANT RECIPE GENERATION: Once the recipe ingredients/quantities are confirmed, IMMEDIATELY output the final JSON containing ONLY the `r` key with the specific recipe array. Omit `s` and `c` keys unless requested.\n' +
+      '2. RECIPE ITEMS INCLUSION RULE: For the recipe\'s \'items\' array, include ONLY the specific ingredients and quantities used in the recipe.\n' +
+      '3. CATEGORY ISOLATION RULE: When generating or updating a recipe, if the \'c\' array is requested, include ONLY the category of the current recipe.\n' +
       '4. ALWAYS OUTPUT VALID RAW JSON ONLY when asked to generate or update stock, recipes, or categories.\n' +
       '5. NEVER wrap JSON in markdown backticks (do NOT use ```json ... ```). Output raw JSON text directly.\n' +
-      '6. Output structure rules:\n' +
-      '   - For recipe generation/updates (default): `{"r": [{"name": "Munda cake", "category": "Pastry", "marginPct": 0, "effortPct": 0, "packaging": 0, "updatedAt": 1788254541076, "description": "", "img": "", "items": [{"name": "Lurpak Butter", "price": 2.055, "total": 1000, "base": 1000, "used": 100}]}]}`\n' +
-      '   - Include `s` or `c` ONLY if the user explicitly asks to view/update stock items or categories.\n' +
-      '7. COMPACT FORMATTING: Do not place closing braces/brackets (`}`, `]`) on individual separate lines at the end of an object/array. Collapse and inline all closing brackets immediately to the right of the final field (e.g., `"used": 150}}]}`).\n\n' +
+      '6. COMPACT FORMATTING & BRACKET COLLAPSE:\n' +
+      '   - Do not place closing braces/brackets (`}`, `]`) on individual separate lines at the end of an object/array.\n' +
+      '   - Collapse and inline all closing brackets immediately to the right of the final field (e.g., `{"s":[{"name":"Blueberry","price":20,"img":""}]}`).\n\n' +
 
       'CASUAL / AMBIGUOUS INPUT HANDLING:\n' +
       'If the user sends greetings or incomplete details, respond in English asking: "What would you like to manage? Item, Recipe, or Category? Please provide the details."'
@@ -156,7 +158,6 @@ const SYSTEM_INSTRUCTION = {
 };
 
 // Hardcoded replies for quick response (English only)
-// Note: Removed standalone 'ok/okay' patterns so confirmation words reach Gemini API properly
 const QUICK_REPLIES = {
   greetings: {
     patterns: /^(hi|hello|hey|salam|namaste)\b/i,
@@ -316,3 +317,4 @@ export default async function handler(req, res) {
 export const config = {
   api: { bodyParser: { sizeLimit: '8mb' } }
 };
+      
