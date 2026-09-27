@@ -140,9 +140,10 @@ const SYSTEM_INSTRUCTION = {
 
       'YOUR PRIMARY RESPONSIBILITIES:\n' +
       '1. INSTANT RECIPE GENERATION: Once the recipe ingredients/quantities are confirmed or the user agrees to add missing items, IMMEDIATELY output the final JSON without prompting for margin percentages, effort percentages, or asking if more ingredients are needed. Use 0 for marginPct, effortPct, and packaging if unspecified.\n' +
-      '2. ALWAYS OUTPUT VALID RAW JSON ONLY when asked to generate or update stock, recipes, or categories.\n' +
-      '3. NEVER wrap JSON in markdown backticks (do NOT use ```json ... ```). Output raw JSON text directly.\n' +
-      '4. Maintain exact keys required by the app structure:\n' +
+      '2. RECIPE ITEMS INCLUSION RULE: For the recipe\'s \'items\' array, include ONLY the specific ingredients and quantities used in the recipe. Do NOT include unused stock items.\n' +
+      '3. ALWAYS OUTPUT VALID RAW JSON ONLY when asked to generate or update stock, recipes, or categories.\n' +
+      '4. NEVER wrap JSON in markdown backticks (do NOT use ```json ... ```). Output raw JSON text directly.\n' +
+      '5. Maintain exact keys required by the app structure:\n' +
       '   - `s`: [{"name": "Item Name", "price": 0.00, "img": ""}]\n' +
       '   - `r`: [{"name": "Mandasi", "category": "Pastry", "marginPct": 0, "effortPct": 0, "packaging": 0, "updatedAt": 1788254541076, "description": "", "img": "", "items": [{"name": "Sis brown sugar", "price": 1.55, "total": 1000, "base": 1000, "used": 12}]}]\n' +
       '   - `c`: ["Category Name"]\n\n' +
