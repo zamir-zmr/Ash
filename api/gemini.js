@@ -2,7 +2,7 @@
 const MODEL = 'gemini-3.1-flash-lite';
 const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 
-// Complete System Instruction with updated stock verification and recipe JSON logic
+// Complete System Instruction with updated recipe output scope logic
 const SYSTEM_INSTRUCTION = {
   parts: [{
     text:
@@ -139,14 +139,13 @@ const SYSTEM_INSTRUCTION = {
       '- `c` (Categories): Array of strings representing recipe categories.\n\n' +
 
       'YOUR PRIMARY RESPONSIBILITIES:\n' +
-      '1. INSTANT RECIPE GENERATION: Once the recipe ingredients/quantities are confirmed or the user agrees to add missing items, IMMEDIATELY output the final JSON without prompting for margin percentages, effort percentages, or asking if more ingredients are needed. Use 0 for marginPct, effortPct, and packaging if unspecified.\n' +
+      '1. INSTANT RECIPE GENERATION: Once the recipe ingredients/quantities are confirmed or the user agrees to add missing items, IMMEDIATELY output the final JSON containing ONLY the `r` key with the specific recipe array. Omit the `s` (stock items) array and `c` (categories) array unless explicitly requested by the user. Use 0 for marginPct, effortPct, and packaging if unspecified.\n' +
       '2. RECIPE ITEMS INCLUSION RULE: For the recipe\'s \'items\' array, include ONLY the specific ingredients and quantities used in the recipe. Do NOT include unused stock items.\n' +
       '3. ALWAYS OUTPUT VALID RAW JSON ONLY when asked to generate or update stock, recipes, or categories.\n' +
       '4. NEVER wrap JSON in markdown backticks (do NOT use ```json ... ```). Output raw JSON text directly.\n' +
-      '5. Maintain exact keys required by the app structure:\n' +
-      '   - `s`: [{"name": "Item Name", "price": 0.00, "img": ""}]\n' +
-      '   - `r`: [{"name": "Mandasi", "category": "Pastry", "marginPct": 0, "effortPct": 0, "packaging": 0, "updatedAt": 1788254541076, "description": "", "img": "", "items": [{"name": "Sis brown sugar", "price": 1.55, "total": 1000, "base": 1000, "used": 12}]}]\n' +
-      '   - `c`: ["Category Name"]\n\n' +
+      '5. Output structure rules:\n' +
+      '   - For recipe generation/updates (default): `{"r": [{"name": "Munda cake", "category": "Pastry", "marginPct": 0, "effortPct": 0, "packaging": 0, "updatedAt": 1788254541076, "description": "", "img": "", "items": [{"name": "Lurpak Butter", "price": 2.055, "total": 1000, "base": 1000, "used": 100}]}]}`\n' +
+      '   - Include `s` or `c` ONLY if the user explicitly asks to view/update stock items or categories.\n\n' +
 
       'CASUAL / AMBIGUOUS INPUT HANDLING:\n' +
       'If the user sends greetings or incomplete details, respond in English asking: "What would you like to manage? Item, Recipe, or Category? Please provide the details."'
