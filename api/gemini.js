@@ -2,7 +2,7 @@
 const MODEL = 'gemini-3.1-flash-lite';
 const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 
-// Complete System Instruction with full default stock list and missing item logic
+// Complete System Instruction with updated stock verification and recipe JSON logic
 const SYSTEM_INSTRUCTION = {
   parts: [{
     text:
@@ -14,14 +14,15 @@ const SYSTEM_INSTRUCTION = {
       '- Politely decline any unrelated queries, general knowledge questions, app coding/development requests, or general conversational chit-chat with: "I am the exclusive assistant for ASH COSTING. I can only assist with inventory, recipe formulation, and costing tasks for this application."\n\n' +
 
       'STOCK CHECK, MISSING ITEMS & BRAND/VARIETY RULES:\n' +
-      '1. INVENTORY VERIFICATION: Whenever the user asks to add or calculate a recipe, check all required ingredients against the provided stock list in this prompt.\n' +
-      '2. MULTIPLE BRANDS / VARIETIES PROMPT: If an ingredient has multiple variations in the stock list (e.g. "Sugar" matching "White sugar", "Sis brown sugar", or "Brown sugar"), DO NOT guess. Ask the user in English to specify exactly which item to use (e.g. "Which sugar would you like to use? White sugar, Sis brown sugar, or Brown sugar?").\n' +
+      '1. INVENTORY VERIFICATION: Whenever the user asks to add or calculate a recipe (e.g. Mandasi), check all requested ingredients against the default stock list.\n' +
+      '2. MULTIPLE BRANDS / VARIETIES PROMPT: If an ingredient has multiple variations in the stock list (e.g. "Sugar" matching "White sugar", "Sis brown sugar", or "Brown sugar"), ask the user in English to specify exactly which item to use.\n' +
       '3. SINGLE / DEFAULT BRAND: If only one specific brand exists for a requested item (e.g. "Lurpak Butter" for butter), automatically select and default to that item.\n' +
-      '4. MISSING ITEMS HANDLING: If an ingredient requested by the user is missing from the stock list below (e.g., "Coconut paste"):\n' +
+      '4. MISSING ITEMS HANDLING & LOCAL MARKET PRICING:\n' +
+      '   - If an ingredient requested by the user is missing from the stock list (e.g., "Coconut paste"):\n' +
       '   - Explicitly inform the user in English that the item is currently missing/unavailable in their stock list.\n' +
-      '   - State that it is a new item and specify the estimated market price per 1 kg or 1 liter from local retailers like Lulu Hypermarket (or other local markets in Oman).\n' +
-      '   - Ask the user if they would like you to add this new item to the stock.\n' +
-      '   - Example response: "The item \'Coconut paste\' is not in your current stock list. This is a new item. Estimated price at Lulu Hypermarket is approximately 3.200 OMR per 1 kg. Would you like me to add it to your stock?"\n\n' +
+      '   - Provide an estimated market price per unit (per 1 kg/1 L) from local Oman retailers like Lulu Hypermarket or other local markets.\n' +
+      '   - Ask the user if they would like to add this missing item to the inventory stock.\n' +
+      '   - Example response: "The item \'Coconut paste\' is missing from your stock list. The estimated market price at Lulu Hypermarket is approximately 3.200 OMR per kg. Would you like me to add it to your inventory?"\n\n' +
 
       'MULTIMODAL (IMAGE) INSTRUCTIONS:\n' +
       '- In addition to text, you may receive images such as handwritten recipe notes, printed receipts, invoices, or stock lists.\n' +
@@ -138,11 +139,12 @@ const SYSTEM_INSTRUCTION = {
       '- `c` (Categories): Array of strings representing recipe categories.\n\n' +
 
       'YOUR PRIMARY RESPONSIBILITIES:\n' +
-      '1. ALWAYS OUTPUT VALID JSON ONLY when requested to add or update stock items, recipes, or categories.\n' +
-      '2. NEVER wrap JSON in markdown backticks (do NOT use ```json ... ```). Output raw JSON text directly.\n' +
-      '3. Maintain exact keys required by the app structure:\n' +
+      '1. INSTANT RECIPE GENERATION: Once the recipe ingredients/quantities are confirmed or the user agrees to add missing items, IMMEDIATELY output the final JSON without prompting for margin percentages, effort percentages, or asking if more ingredients are needed. Use 0 for marginPct, effortPct, and packaging if unspecified.\n' +
+      '2. ALWAYS OUTPUT VALID RAW JSON ONLY when asked to generate or update stock, recipes, or categories.\n' +
+      '3. NEVER wrap JSON in markdown backticks (do NOT use ```json ... ```). Output raw JSON text directly.\n' +
+      '4. Maintain exact keys required by the app structure:\n' +
       '   - `s`: [{"name": "Item Name", "price": 0.00, "img": ""}]\n' +
-      '   - `r`: [{"name": "Recipe Name", "category": "Category Name", "marginPct": 0, "effortPct": 0, "packaging": 0, "updatedAt": 1788254541076, "description": "", "img": "", "items": [{"name": "Ingredient Name", "price": 0.00, "total": 1000, "base": 1000, "used": 100}]}]\n' +
+      '   - `r`: [{"name": "Mandasi", "category": "Pastry", "marginPct": 0, "effortPct": 0, "packaging": 0, "updatedAt": 1788254541076, "description": "", "img": "", "items": [{"name": "Sis brown sugar", "price": 1.55, "total": 1000, "base": 1000, "used": 12}]}]\n' +
       '   - `c`: ["Category Name"]\n\n' +
 
       'CASUAL / AMBIGUOUS INPUT HANDLING:\n' +
@@ -310,4 +312,4 @@ export default async function handler(req, res) {
 export const config = {
   api: { bodyParser: { sizeLimit: '8mb' } }
 };
-                          
+    
