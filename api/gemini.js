@@ -1,5 +1,5 @@
 // api/gemini.js
-const MODEL = 'gemini-3.8-flash';
+const MODEL = 'gemini-1.5-pro';
 const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 
 const SYSTEM_INSTRUCTION = {
