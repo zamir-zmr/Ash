@@ -46,10 +46,12 @@ const SYSTEM_INSTRUCTION = {
       '   - Provide an estimated market price per unit (per 1 kg/1 L) from local Oman retailers like Lulu Hypermarket.\n' +
       '   - Ask the user if they would like to add this missing item to the inventory stock.\n' +
       '   - Example response: "The item \'Red currant\' is missing from your stock list. The estimated market price at local retailers is approximately 4.500 OMR per kg. Would you like me to add it to your inventory?"\n' +
-      '5. RECIPE + MISSING ITEM COMBINED CONFIRMATION (CRITICAL — DO NOT FORGET THE RECIPE):\n' +
+      '5. RECIPE + MISSING ITEM COMBINED CONFIRMATION (CRITICAL — DO NOT FORGET THE RECIPE, DO NOT MIX UP ITEMS):\n' +
       '   - If the user originally asked to add/create a RECIPE, and that recipe uses an ingredient missing from stock, and you asked whether to add the missing item, and the user then confirms with "Yes"/"Ok"/"Add it"/"Sure"/"Yep":\n' +
       '   - You MUST output BOTH in the SAME JSON response: (a) the new item in the `s` array, AND (b) the complete recipe the user originally asked for in the `r` array, using that newly added item among its `items`.\n' +
-      '   - NEVER output only the `s` array in this situation and drop the recipe — the recipe the user asked for must always be created once its missing ingredient is confirmed added. Remember the original recipe request (name, items, category, etc.) across the missing-item confirmation exchange.\n' +
+      '   - NEVER output only the `s` array in this situation and drop the recipe — the recipe the user asked for must always be created once its missing ingredient is confirmed added.\n' +
+      '   - USE ONLY THE MOST RECENT RECIPE REQUEST AND MOST RECENT MISSING ITEM FROM THIS CONVERSATION — the one from the user\'s latest "Add recipe..." message and your immediately preceding "is missing from your stock list" question. NEVER reuse an item name, price, or recipe from an earlier exchange, an older example, or a previous recipe discussed earlier in the conversation. Every "Ok"/"Yes" confirmation refers ONLY to the single missing-item question that came directly before it — nothing older.\n' +
+      '   - Before outputting, double-check: does the item name in your `s` array exactly match the ingredient name from your own immediately preceding "is missing from your stock list" message? Does the recipe name/category/items in your `r` array exactly match the user\'s most recent "Add recipe..." message? If either does not match, you have used stale/wrong data — correct it before responding.\n' +
       '   - Example: user asks to add recipe "Martha cake" with items ladyfingers (1 box) and category "tuti"; ladyfingers is missing; after user confirms adding it, output: `{"s":[{"name":"ladyfingers","price":1.5,"img":""}],"r":[{"name":"Martha cake","category":"tuti","items":[{"name":"ladyfingers","qty":1,"unit":"box"}],"packaging":"","marginPct":0,"effortPct":0,"description":"","img":"","updatedAt":""}],"c":[]}`.\n\n' +
 
       'DEFAULT APP STOCK INVENTORY (FOR GEMINI INTERNAL KNOWLEDGE BASE ONLY - DO NOT OUTPUT TO USER UNLESS STRICT TRIGGER MATCHED):\n' +
@@ -296,4 +298,4 @@ export default async function handler(req, res) {
 export const config = {
   api: { bodyParser: { sizeLimit: '8mb' } }
 };
-    
+      
