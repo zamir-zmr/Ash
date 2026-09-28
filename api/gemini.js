@@ -21,16 +21,18 @@ const SYSTEM_INSTRUCTION = {
       '2. RECIPES BY CATEGORY:\n' + JSON.stringify(RECIPES_BY_CATEGORY) + '\n' +
       '3. DEFAULT APP STOCK INVENTORY:\n' + JSON.stringify(STOCK_DATA) + '\n\n' +
 
+      'RESPONSE FORMATTING & DYNAMIC DATA HANDLING RULES:\n' +
+      '1. CONVERSATIONAL DEFAULT: Respond in plain, clear conversational text for general queries (e.g., checking if an item/recipe/category exists, asking about item prices, or general information queries).\n' +
+      '2. CONDITIONAL JSON OUTPUT: Generate JSON output ONLY when the user explicitly requests to add, update, modify, or generate new stock items, recipes, or categories.\n' +
+      '3. AUTOMATIC INVENTORY & CATEGORY UPDATES:\n' +
+      '   - If a requested recipe or ingredient is missing from the current inventory, automatically generate the missing data inside the appropriate array: `s` for Stock Items, `r` for Recipes, or `c` for Categories.\n' +
+      '   - If a new category is specified, include it in the `c` array as a new category. If the category already exists, map the recipe directly under that existing category.\n' +
+      '   - Estimate local market prices per base unit (per 1 kg/1 L/1 pc) for any missing stock items from local Oman hypermarkets.\n\n' +
+
       'STOCK CHECK, MISSING ITEMS & BRAND/VARIETY RULES:\n' +
       '1. INVENTORY VERIFICATION: Whenever the user asks to add or calculate a recipe, check all requested ingredients against the provided STOCK DATA.\n' +
       '2. MULTIPLE BRANDS / VARIETIES PROMPT: If an ingredient has multiple variations in the stock list (e.g. "Sugar" matching "White sugar" or "Brown sugar"), ask the user in English to specify exactly which item to use.\n' +
-      '3. SINGLE / DEFAULT BRAND: If only one specific brand exists for a requested item (e.g. "Lurpak Butter"), automatically select and default to that item.\n' +
-      '4. MISSING ITEMS AUTOMATIC INCLUSION RULE:\n' +
-      '   - If an ingredient requested by the user is missing from the stock list:\n' +
-      '   - Estimate its local market price per base unit (per 1 kg/1 L/1 pc) from local Oman markets like Lulu Hypermarket.\n' +
-      '   - Include this newly identified missing item inside the `s` (stock items) array in the output JSON so the app can permanently register it to the stock inventory.\n' +
-      '   - Example output when a missing item is used in a recipe:\n' +
-      '     `{"s":[{"name":"Coconut water","price":3.46,"img":""}],"r":[{"name":"Crumble","category":"Crumble",...}]}`\n\n' +
+      '3. SINGLE / DEFAULT BRAND: If only one specific brand exists for a requested item (e.g. "Lurpak Butter"), automatically select and default to that item.\n\n' +
 
       'MULTIMODAL (IMAGE) INSTRUCTIONS:\n' +
       '- In addition to text, you may receive images such as handwritten recipe notes, printed receipts, invoices, or stock lists.\n' +
@@ -215,4 +217,4 @@ export default async function handler(req, res) {
 export const config = {
   api: { bodyParser: { sizeLimit: '8mb' } }
 };
-    
+                                   
