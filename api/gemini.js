@@ -1,16 +1,11 @@
 // api/gemini.js
 import { CATEGORIES } from './category.js';
 import { RECIPES_BY_CATEGORY } from './recipe.js';
-
-// Vercel / Node.js ES Modules mein .json import karne ka stable tarika
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const STOCK_DATA = require('./stock.json');
+import { STOCK_DATA } from './stock.js';
 
 const MODEL = 'gemini-3.1-flash-lite';
 const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 
-// Complete System Instruction with imported stock.json, category.js & recipe.js
 const SYSTEM_INSTRUCTION = {
   parts: [{
     text:
@@ -62,7 +57,6 @@ const SYSTEM_INSTRUCTION = {
   }]
 };
 
-// Hardcoded replies for quick response (English only)
 const QUICK_REPLIES = {
   greetings: {
     patterns: /^(hi|hello|hey|salam|namaste)\b/i,
@@ -221,4 +215,4 @@ export default async function handler(req, res) {
 export const config = {
   api: { bodyParser: { sizeLimit: '8mb' } }
 };
-              
+    
