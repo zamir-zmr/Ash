@@ -1,12 +1,16 @@
 // api/gemini.js
 import { CATEGORIES } from './category.js';
 import { RECIPES_BY_CATEGORY } from './recipe.js';
-import { STOCK_DATA } from './stock.js';
+
+// Vercel / Node.js ES Modules mein .json import karne ka stable tarika
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const STOCK_DATA = require('./stock.json');
 
 const MODEL = 'gemini-3.1-flash-lite';
 const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 
-// Complete Dynamic System Instruction importing data from JS files
+// Complete System Instruction with imported stock.json, category.js & recipe.js
 const SYSTEM_INSTRUCTION = {
   parts: [{
     text:
@@ -217,4 +221,4 @@ export default async function handler(req, res) {
 export const config = {
   api: { bodyParser: { sizeLimit: '8mb' } }
 };
-          
+              
