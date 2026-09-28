@@ -1,8 +1,14 @@
-// api/gemini.js
+import stockData from './stock.json' assert { type: 'json' };
+
 const MODEL = 'gemini-3.1-flash-lite';
 const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 
-// Complete System Instruction with plain text stock inventory and auto-add missing stock rule
+// Convierte la lista formateada del JSON a texto plano para el prompt
+const formattedStockText = stockData
+  .map(item => `${item.id}. ${item.name} - ${item.price} OMR`)
+  .join('\n');
+
+// Complete System Instruction con integración dinámica de inventario
 const SYSTEM_INSTRUCTION = {
   parts: [{
     text:
@@ -31,104 +37,7 @@ const SYSTEM_INSTRUCTION = {
       '- If the image is unclear or non-bakery related, ask the user in English for clarification.\n\n' +
 
       'DEFAULT APP STOCK INVENTORY:\n' +
-      '1. Sliced irani pistachio - 12 OMR\n' +
-      '2. Belgium gourmet - 7.1 OMR\n' +
-      '3. Lurpak Butter - 2.055 OMR\n' +
-      '4. Oil Minara - 3.46 OMR\n' +
-      '5. Sis brown sugar - 1.55 OMR\n' +
-      '6. White sugar - 0.412 OMR\n' +
-      '7. Flour al kareef - 0.25 OMR\n' +
-      '8. Baking Soda - 0.48 OMR\n' +
-      '9. Nezo salt - 0.31 OMR\n' +
-      '10. Corn starch (daily fresh) - 0.82 OMR\n' +
-      '11. Hazelnut paste - 8 OMR\n' +
-      '12. Hazelnut - 7.9 OMR\n' +
-      '13. Felchin chocolate - 9.5 OMR\n' +
-      '14. Coco powder - 8.6 OMR\n' +
-      '15. White Chocolate - 6.6 OMR\n' +
-      '16. Whipping cream - 2.625 OMR\n' +
-      '17. Nutella - 4.32 OMR\n' +
-      '18. Milk - 0.55 OMR\n' +
-      '19. Nescafe Gold Coffee - 5.065 OMR\n' +
-      '20. Callebaut Milk Chocolate - 10 OMR\n' +
-      '21. Crunchy For Cloud Cake - 3.455 OMR\n' +
-      '22. Baking powder - 0.38 OMR\n' +
-      '23. Condensed milk - 1.7 OMR\n' +
-      '24. Tea Milk - 0.91 OMR\n' +
-      '25. Saffron - 4.5 OMR\n' +
-      '26. Brown sugar - 0.3 OMR\n' +
-      '27. Salt - 0.625 OMR\n' +
-      '28. Oil - 1.3 OMR\n' +
-      '29. Belgium garmet Chocolate - 68.8 OMR\n' +
-      '30. Eggs - 0.062 OMR\n' +
-      '31. Vanilla Essence - 7.875 OMR\n' +
-      '32. Chocolate van - 8 OMR\n' +
-      '33. Philadelphia - 4.5 OMR\n' +
-      '34. Hajdu - 2.2 OMR\n' +
-      '35. Mascapone - 3.39 OMR\n' +
-      '36. Self Raising Flour - 0.65 OMR\n' +
-      '37. Cinnamon powder - 3.5 OMR\n' +
-      '38. Date Paste - 4.8 OMR\n' +
-      '39. Walnut - 8.5 OMR\n' +
-      '40. Almond Slices - 9 OMR\n' +
-      '41. Lotus smooth - 5.975 OMR\n' +
-      '42. Fleur De Sel Salt - 7.2 OMR\n' +
-      '43. Date Cake Sauce - 1.144 OMR\n' +
-      '44. Galaxy Milk Chocolate - 0.36 OMR\n' +
-      '45. Frozen Strawberry - 0.55 OMR\n' +
-      '46. Frozen Raspberry - 2.28 OMR\n' +
-      '47. Sauce Japanese cheesecake - 0.516 OMR\n' +
-      '48. Strawberry Tart Base - 1.664 OMR\n' +
-      '49. Mousseline Cream - 0.969 OMR\n' +
-      '50. Nutella Ganash - 0.563 OMR\n' +
-      '51. Pistachio slice (Irani) - 11.6 OMR\n' +
-      '52. Whole pistachio (Irani) - 7.4 OMR\n' +
-      '53. Almond slice (USA) - 4 OMR\n' +
-      '54. Almond powder - 4.1 OMR\n' +
-      '55. Full almond (USA) - 3.7 OMR\n' +
-      '56. Almond powder (USA) - 4.2 OMR\n' +
-      '57. Pecan (USA) - 6.9 OMR\n' +
-      '58. Hazelnuts (Turkey) - 7.9 OMR\n' +
-      '59. Small cashew (Vietnam) - 3.7 OMR\n' +
-      '60. Big cashew (India) - 4.8 OMR\n' +
-      '61. Golden raisins (Irani) - 1.9 OMR\n' +
-      '62. Black raisins (Afghani) - 2.1 OMR\n' +
-      '63. Cardamom 8 mm (India) - 14.7 OMR\n' +
-      '64. Sunflower seeds - 1.6 OMR\n' +
-      '65. Pumpkin seeds - 2.1 OMR\n' +
-      '66. Chia seeds (India) - 2.7 OMR\n' +
-      '67. Small prawns (Irani) - 2.7 OMR\n' +
-      '68. Toffee - 0.902 OMR\n' +
-      '69. Glucose - 5.58 OMR\n' +
-      '70. Ganash for toffee Cake - 2.761 OMR\n' +
-      '71. Capilano Pure Honey 1kg - 4.25 OMR\n' +
-      '72. Sliced irani pistachio2 - 12 OMR\n' +
-      '73. Zucchini - 0.65 OMR\n' +
-      '74. Raisins - 2.4 OMR\n' +
-      '75. Kusa (Zucchini) - 0.65 OMR\n' +
-      '76. Self rising flour - 0.35 OMR\n' +
-      '77. Pistachio slice - 8.5 OMR\n' +
-      '78. Candia French whipping cream - 2.5 OMR\n' +
-      '79. Nutella chocolate - 4.32 OMR\n' +
-      '80. 1 PC Eggs - 0.062 OMR\n' +
-      '81. Fresh Carrot - 0.45 OMR\n' +
-      '82. Vanilla - 7.875 OMR\n' +
-      '83. Oil Noor canola oil - 1.1 OMR\n' +
-      '84. Butter almaraai - 4.32 OMR\n' +
-      '85. Rose Water - 0.45 OMR\n' +
-      '86. Cardamom Powder - 1.2 OMR\n' +
-      '87. Crushed Pistachio - 1.85 OMR\n' +
-      '88. Coconut Milk - 0.65 OMR\n' +
-      '89. Cocoa Powder - 0.79 OMR\n' +
-      '90. Red Food Color - 0.215 OMR\n' +
-      '91. Orange Blossom Water - 0.54 OMR\n' +
-      '92. Glucose Syrup - 2.79 OMR\n' +
-      '93. Kiri Cheese - 5.02 OMR\n' +
-      '94. Raffaello - 2.12 OMR\n' +
-      '95. Dark Chocolate Felchlin - 8.5 OMR\n' +
-      '96. Sliced irani indian - 12 OMR\n' +
-      '97. White Sugar - 0.4 OMR\n' +
-      '98. Desiccated Coconut - 2.95 OMR\n\n' +
+      formattedStockText + '\n\n' +
 
       'APP DATA STRUCTURE REQUIREMENTS:\n' +
       '- `s` (Stock Items): Array of items with keys `{ name, price, img }`. Price is per Base Unit (1000g/1000ml or 1pc/1kg).\n' +
@@ -312,4 +221,4 @@ export default async function handler(req, res) {
 export const config = {
   api: { bodyParser: { sizeLimit: '8mb' } }
 };
-      
+  
