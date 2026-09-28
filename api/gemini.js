@@ -33,107 +33,107 @@ const SYSTEM_INSTRUCTION = {
       '   - Ask the user if they would like to add this missing item to the inventory stock.\n' +
       '   - Example response: "The item \'Red currant\' is missing from your stock list. The estimated market price at local retailers is approximately 4.500 OMR per kg. Would you like me to add it to your inventory?"\n\n' +
 
-      'DEFAULT APP STOCK INVENTORY (FOR GEMINI INTERNAL REFERENCE ONLY - STRICTLY DO NOT OUTPUT TO USER UNLESS EXPLICITLY REQUESTED FOR FULL STOCK):\n' +
-      '{"s":[' +
-        '{"name":"Sliced irani pistachio","price":12,"img":""},' +
-        '{"name":"Belgium gourmet","price":7.1,"img":""},' +
-        '{"name":"Lurpak Butter","price":2.055,"img":""},' +
-        '{"name":"Oil Minara","price":3.46,"img":""},' +
-        '{"name":"Sis brown sugar","price":1.55,"img":""},' +
-        '{"name":"White sugar","price":0.412,"img":""},' +
-        '{"name":"Flour al kareef","price":0.25,"img":""},' +
-        '{"name":"Baking Soda","price":0.48,"img":""},' +
-        '{"name":"Nezo salt","price":0.31,"img":""},' +
-        '{"name":"Corn starch (daily fresh)","price":0.82,"img":""},' +
-        '{"name":"Hazelnut paste","price":8,"img":""},' +
-        '{"name":"Hazelnut","price":7.9,"img":""},' +
-        '{"name":"Felchin chocolate","price":9.5,"img":""},' +
-        '{"name":"Coco powder","price":8.6,"img":""},' +
-        '{"name":"White Chocolate","price":6.6,"img":""},' +
-        '{"name":"Whipping cream","price":2.625,"img":""},' +
-        '{"name":"Nutella","price":4.32,"img":""},' +
-        '{"name":"Milk","price":0.55,"img":""},' +
-        '{"name":"Nescafe Gold Coffee","price":5.065,"img":""},' +
-        '{"name":"Callebaut Milk Chocolate","price":10,"img":""},' +
-        '{"name":"Crunchy For Cloud Cake","price":3.455,"img":""},' +
-        '{"name":"Baking powder","price":0.38,"img":""},' +
-        '{"name":"Condensed milk","price":1.7,"img":""},' +
-        '{"name":"Tea Milk","price":0.91,"img":""},' +
-        '{"name":"Saffron","price":4.5,"img":""},' +
-        '{"name":"Brown sugar","price":0.3,"img":""},' +
-        '{"name":"Salt","price":0.625,"img":""},' +
-        '{"name":"Oil","price":1.3,"img":""},' +
-        '{"name":"Belgium garmet Chocolate","price":68.8,"img":""},' +
-        '{"name":"Eggs","price":0.062,"img":""},' +
-        '{"name":"Vanilla Essence","price":7.875,"img":""},' +
-        '{"name":"Chocolate van","price":8,"img":""},' +
-        '{"name":"Philadelphia","price":4.5,"img":""},' +
-        '{"name":"Hajdu","price":2.2,"img":""},' +
-        '{"name":"Mascapone","price":3.39,"img":""},' +
-        '{"name":"Self Raising Flour","price":0.65,"img":""},' +
-        '{"name":"Cinnamon powder","price":3.5,"img":""},' +
-        '{"name":"Date Paste","price":4.8,"img":""},' +
-        '{"name":"Walnut","price":8.5,"img":""},' +
-        '{"name":"Almond Slices","price":9,"img":""},' +
-        '{"name":"Lotus smooth","price":5.975,"img":""},' +
-        '{"name":"Fleur De Sel Salt","price":7.2,"img":""},' +
-        '{"name":"Date Cake Sauce","price":1.144,"img":""},' +
-        '{"name":"Galaxy Milk Chocolate","price":0.36,"img":""},' +
-        '{"name":"Frozen Strawberry","price":0.55,"img":""},' +
-        '{"name":"Frozen Raspberry","price":2.28,"img":""},' +
-        '{"name":"Sauce Japanese cheesecake","price":0.516,"img":""},' +
-        '{"name":"Strawberry Tart Base","price":1.664,"img":""},' +
-        '{"name":"Mousseline Cream","price":0.969,"img":""},' +
-        '{"name":"Nutella Ganash","price":0.563,"img":""},' +
-        '{"name":"Pistachio slice (Irani)","price":11.6,"img":""},' +
-        '{"name":"Whole pistachio (Irani)","price":7.4,"img":""},' +
-        '{"name":"Almond slice (USA)","price":4,"img":""},' +
-        '{"name":"Almond powder","price":4.1,"img":""},' +
-        '{"name":"Full almond (USA)","price":3.7,"img":""},' +
-        '{"name":"Almond powder (USA)","price":4.2,"img":""},' +
-        '{"name":"Pecan (USA)","price":6.9,"img":""},' +
-        '{"name":"Hazelnuts (Turkey)","price":7.9,"img":""},' +
-        '{"name":"Small cashew (Vietnam)","price":3.7,"img":""},' +
-        '{"name":"Big cashew (India)","price":4.8,"img":""},' +
-        '{"name":"Golden raisins (Irani)","price":1.9,"img":""},' +
-        '{"name":"Black raisins (Afghani)","price":2.1,"img":""},' +
-        '{"name":"Cardamom 8 mm (India)","price":14.7,"img":""},' +
-        '{"name":"Sunflower seeds","price":1.6,"img":""},' +
-        '{"name":"Pumpkin seeds","price":2.1,"img":""},' +
-        '{"name":"Chia seeds (India)","price":2.7,"img":""},' +
-        '{"name":"Small prawns (Irani)","price":2.7,"img":""},' +
-        '{"name":"Toffee","price":0.902,"img":""},' +
-        '{"name":"Glucose","price":5.58,"img":""},' +
-        '{"name":"Ganash for toffee Cake","price":2.761,"img":""},' +
-        '{"name":"Capilano Pure Honey 1kg","price":4.25,"img":""},' +
-        '{"name":"Sliced irani pistachio2","price":12,"img":""},' +
-        '{"name":"Zucchini","price":0.65,"img":""},' +
-        '{"name":"Raisins","price":2.4,"img":""},' +
-        '{"name":"Kusa (Zucchini)","price":0.65,"img":""},' +
-        '{"name":"Self rising flour","price":0.35,"img":""},' +
-        '{"name":"Pistachio slice","price":8.5,"img":""},' +
-        '{"name":"Candia French whipping cream","price":2.5,"img":""},' +
-        '{"name":"Nutella chocolate","price":4.32,"img":""},' +
-        '{"name":"1 PC Eggs","price":0.062,"img":""},' +
-        '{"name":"Fresh Carrot","price":0.45,"img":""},' +
-        '{"name":"Vanilla","price":7.875,"img":""},' +
-        '{"name":"Oil Noor canola oil","price":1.1,"img":""},' +
-        '{"name":"Butter almaraai","price":4.32,"img":""},' +
-        '{"name":"Rose Water","price":0.45,"img":""},' +
-        '{"name":"Cardamom Powder","price":1.2,"img":""},' +
-        '{"name":"Crushed Pistachio","price":1.85,"img":""},' +
-        '{"name":"Coconut Milk","price":0.65,"img":""},' +
-        '{"name":"Cocoa Powder","price":0.79,"img":""},' +
-        '{"name":"Red Food Color","price":0.215,"img":""},' +
-        '{"name":"Orange Blossom Water","price":0.54,"img":""},' +
-        '{"name":"Glucose Syrup","price":2.79,"img":""},' +
-        '{"name":"Kiri Cheese","price":5.02,"img":""},' +
-        '{"name":"Raffaello","price":2.12,"img":""},' +
-        '{"name":"Dark Chocolate Felchlin","price":8.5,"img":""},' +
-        '{"name":"Sliced irani indian","price":12,"img":""},' +
-        '{"name":"White Sugar","price":0.4,"img":""},' +
-        '{"name":"Desiccated Coconut","price":2.95,"img":""}' +
-      '],"r":[],"c":[]}\n\n' +
+      'DEFAULT APP STOCK INVENTORY (FOR GEMINI INTERNAL REFERENCE ONLY - STRICTLY DO NOT OUTPUT TO USER UNLESS EXPLICITLY REQUESTED FOR FULL STOCK).\n' +
+      'FORMAT OF THIS LIST: serial number. Item name - price (OMR per kg/L/unit). It is plain text for your reference only. If the full stock list is explicitly requested, convert it into raw JSON in the app format {"s":[{"name":"...","price":0,"img":""}],"r":[],"c":[]}.\n' +
+      '1. Sliced irani pistachio - 12\n' +
+      '2. Belgium gourmet - 7.1\n' +
+      '3. Lurpak Butter - 2.055\n' +
+      '4. Oil Minara - 3.46\n' +
+      '5. Sis brown sugar - 1.55\n' +
+      '6. White sugar - 0.412\n' +
+      '7. Flour al kareef - 0.25\n' +
+      '8. Baking Soda - 0.48\n' +
+      '9. Nezo salt - 0.31\n' +
+      '10. Corn starch (daily fresh) - 0.82\n' +
+      '11. Hazelnut paste - 8\n' +
+      '12. Hazelnut - 7.9\n' +
+      '13. Felchin chocolate - 9.5\n' +
+      '14. Coco powder - 8.6\n' +
+      '15. White Chocolate - 6.6\n' +
+      '16. Whipping cream - 2.625\n' +
+      '17. Nutella - 4.32\n' +
+      '18. Milk - 0.55\n' +
+      '19. Nescafe Gold Coffee - 5.065\n' +
+      '20. Callebaut Milk Chocolate - 10\n' +
+      '21. Crunchy For Cloud Cake - 3.455\n' +
+      '22. Baking powder - 0.38\n' +
+      '23. Condensed milk - 1.7\n' +
+      '24. Tea Milk - 0.91\n' +
+      '25. Saffron - 4.5\n' +
+      '26. Brown sugar - 0.3\n' +
+      '27. Salt - 0.625\n' +
+      '28. Oil - 1.3\n' +
+      '29. Belgium garmet Chocolate - 68.8\n' +
+      '30. Eggs - 0.062\n' +
+      '31. Vanilla Essence - 7.875\n' +
+      '32. Chocolate van - 8\n' +
+      '33. Philadelphia - 4.5\n' +
+      '34. Hajdu - 2.2\n' +
+      '35. Mascapone - 3.39\n' +
+      '36. Self Raising Flour - 0.65\n' +
+      '37. Cinnamon powder - 3.5\n' +
+      '38. Date Paste - 4.8\n' +
+      '39. Walnut - 8.5\n' +
+      '40. Almond Slices - 9\n' +
+      '41. Lotus smooth - 5.975\n' +
+      '42. Fleur De Sel Salt - 7.2\n' +
+      '43. Date Cake Sauce - 1.144\n' +
+      '44. Galaxy Milk Chocolate - 0.36\n' +
+      '45. Frozen Strawberry - 0.55\n' +
+      '46. Frozen Raspberry - 2.28\n' +
+      '47. Sauce Japanese cheesecake - 0.516\n' +
+      '48. Strawberry Tart Base - 1.664\n' +
+      '49. Mousseline Cream - 0.969\n' +
+      '50. Nutella Ganash - 0.563\n' +
+      '51. Pistachio slice (Irani) - 11.6\n' +
+      '52. Whole pistachio (Irani) - 7.4\n' +
+      '53. Almond slice (USA) - 4\n' +
+      '54. Almond powder - 4.1\n' +
+      '55. Full almond (USA) - 3.7\n' +
+      '56. Almond powder (USA) - 4.2\n' +
+      '57. Pecan (USA) - 6.9\n' +
+      '58. Hazelnuts (Turkey) - 7.9\n' +
+      '59. Small cashew (Vietnam) - 3.7\n' +
+      '60. Big cashew (India) - 4.8\n' +
+      '61. Golden raisins (Irani) - 1.9\n' +
+      '62. Black raisins (Afghani) - 2.1\n' +
+      '63. Cardamom 8 mm (India) - 14.7\n' +
+      '64. Sunflower seeds - 1.6\n' +
+      '65. Pumpkin seeds - 2.1\n' +
+      '66. Chia seeds (India) - 2.7\n' +
+      '67. Small prawns (Irani) - 2.7\n' +
+      '68. Toffee - 0.902\n' +
+      '69. Glucose - 5.58\n' +
+      '70. Ganash for toffee Cake - 2.761\n' +
+      '71. Capilano Pure Honey 1kg - 4.25\n' +
+      '72. Sliced irani pistachio2 - 12\n' +
+      '73. Zucchini - 0.65\n' +
+      '74. Raisins - 2.4\n' +
+      '75. Kusa (Zucchini) - 0.65\n' +
+      '76. Self rising flour - 0.35\n' +
+      '77. Pistachio slice - 8.5\n' +
+      '78. Candia French whipping cream - 2.5\n' +
+      '79. Nutella chocolate - 4.32\n' +
+      '80. 1 PC Eggs - 0.062\n' +
+      '81. Fresh Carrot - 0.45\n' +
+      '82. Vanilla - 7.875\n' +
+      '83. Oil Noor canola oil - 1.1\n' +
+      '84. Butter almaraai - 4.32\n' +
+      '85. Rose Water - 0.45\n' +
+      '86. Cardamom Powder - 1.2\n' +
+      '87. Crushed Pistachio - 1.85\n' +
+      '88. Coconut Milk - 0.65\n' +
+      '89. Cocoa Powder - 0.79\n' +
+      '90. Red Food Color - 0.215\n' +
+      '91. Orange Blossom Water - 0.54\n' +
+      '92. Glucose Syrup - 2.79\n' +
+      '93. Kiri Cheese - 5.02\n' +
+      '94. Raffaello - 2.12\n' +
+      '95. Dark Chocolate Felchlin - 8.5\n' +
+      '96. Sliced irani indian - 12\n' +
+      '97. White Sugar - 0.4\n' +
+      '98. Desiccated Coconut - 2.95\n' +
+      '\n' +
 
       'APP DATA STRUCTURE REQUIREMENTS:\n' +
       '- `s` (Stock Items): Array containing ONLY newly added/updated items `{ name, price, img }` unless full stock list is explicitly requested.\n' +
@@ -277,4 +277,3 @@ export default async function handler(req, res) {
 export const config = {
   api: { bodyParser: { sizeLimit: '8mb' } }
 };
-      
