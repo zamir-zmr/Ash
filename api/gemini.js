@@ -1,13 +1,15 @@
 // gemini.js
 import { CATEGORIES } from './category.js';
 import { RECIPES_BY_CATEGORY } from './recipe.js';
-import stockData from './Stock.json' assert { type: 'json' };
 
-// Gemini API calling function
+// Node.js serverless environment mein json load karne ka standard tarika
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const stockData = require('./stock.json');
+
 export async function askGemini(userPrompt, apiKey) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
-  // System instruction setup with Categories, Recipes, and Stock context
   const systemInstructionText = `
 You are an AI assistant for the AshCostinApp bakery & cafe costing management system.
 You have full knowledge of the available categories, recipes, and raw material stock items in the application.
@@ -52,9 +54,13 @@ Instructions:
     });
 
     const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error?.message || 'Gemini API call failed');
+    }
+
     return data.candidates[0].content.parts[0].text;
   } catch (error) {
     console.error("Gemini API Error:", error);
     throw error;
   }
-      }
+}
