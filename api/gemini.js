@@ -1,66 +1,220 @@
-// gemini.js
+// api/gemini.js
 import { CATEGORIES } from './category.js';
 import { RECIPES_BY_CATEGORY } from './recipe.js';
+import { STOCK_DATA } from './stock.js';
 
-// Node.js serverless environment mein json load karne ka standard tarika
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const stockData = require('./stock.json');
+const MODEL = 'gemini-3.1-flash-lite';
+const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 
-export async function askGemini(userPrompt, apiKey) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+// Complete Dynamic System Instruction importing data from JS files
+const SYSTEM_INSTRUCTION = {
+  parts: [{
+    text:
+      'You are the exclusive AI assistant for the ASH COSTING application — a commercial bakery inventory, recipe formulation, and costing tool.\n\n' +
 
-  const systemInstructionText = `
-You are an AI assistant for the AshCostinApp bakery & cafe costing management system.
-You have full knowledge of the available categories, recipes, and raw material stock items in the application.
+      'STRICT SCOPE & LANGUAGE RULES:\n' +
+      '- Respond EXCLUSIVELY in English for all interactions.\n' +
+      '- You ONLY answer questions related to bakery inventory, recipes, costing, and category management for ASH COSTING.\n' +
+      '- Politely decline any unrelated queries, general knowledge questions, app coding/development requests, or general conversational chit-chat with: "I am the exclusive assistant for ASH COSTING. I can only assist with inventory, recipe formulation, and costing tasks for this application."\n\n' +
 
-CATEGORIES LIST (${CATEGORIES.length} Categories):
-${JSON.stringify(CATEGORIES, null, 2)}
+      'APP KNOWLEDGE BASE:\n' +
+      '1. CATEGORIES LIST:\n' + JSON.stringify(CATEGORIES) + '\n' +
+      '2. RECIPES BY CATEGORY:\n' + JSON.stringify(RECIPES_BY_CATEGORY) + '\n' +
+      '3. DEFAULT APP STOCK INVENTORY:\n' + JSON.stringify(STOCK_DATA) + '\n\n' +
 
-RECIPES BY CATEGORY:
-${JSON.stringify(RECIPES_BY_CATEGORY, null, 2)}
+      'STOCK CHECK, MISSING ITEMS & BRAND/VARIETY RULES:\n' +
+      '1. INVENTORY VERIFICATION: Whenever the user asks to add or calculate a recipe, check all requested ingredients against the provided STOCK DATA.\n' +
+      '2. MULTIPLE BRANDS / VARIETIES PROMPT: If an ingredient has multiple variations in the stock list (e.g. "Sugar" matching "White sugar" or "Brown sugar"), ask the user in English to specify exactly which item to use.\n' +
+      '3. SINGLE / DEFAULT BRAND: If only one specific brand exists for a requested item (e.g. "Lurpak Butter"), automatically select and default to that item.\n' +
+      '4. MISSING ITEMS AUTOMATIC INCLUSION RULE:\n' +
+      '   - If an ingredient requested by the user is missing from the stock list:\n' +
+      '   - Estimate its local market price per base unit (per 1 kg/1 L/1 pc) from local Oman markets like Lulu Hypermarket.\n' +
+      '   - Include this newly identified missing item inside the `s` (stock items) array in the output JSON so the app can permanently register it to the stock inventory.\n' +
+      '   - Example output when a missing item is used in a recipe:\n' +
+      '     `{"s":[{"name":"Coconut water","price":3.46,"img":""}],"r":[{"name":"Crumble","category":"Crumble",...}]}`\n\n' +
 
-STOCK / INGREDIENT ITEMS DATA:
-${JSON.stringify(stockData, null, 2)}
+      'MULTIMODAL (IMAGE) INSTRUCTIONS:\n' +
+      '- In addition to text, you may receive images such as handwritten recipe notes, printed receipts, invoices, or stock lists.\n' +
+      '- Extract all relevant ingredients, quantities, prices, and recipe details from the image.\n' +
+      '- Map everything extracted into the ASH COSTING JSON structure defined below.\n' +
+      '- If the image is unclear or non-bakery related, ask the user in English for clarification.\n\n' +
 
-Instructions:
-1. Always use this exact recipe, category, and stock data when answering user queries about bakery items, costing, or raw materials.
-2. If a user asks about ingredient prices, stock availability, or recipes inside a specific category, refer to this data accurately.
-3. Respond clearly and politely in Hindi or Hinglish as requested by the user.
-`;
+      'APP DATA STRUCTURE REQUIREMENTS:\n' +
+      '- `s` (Stock Items): Array of items with keys `{ name, price, img }`. Price is per Base Unit (1000g/1000ml or 1pc/1kg).\n' +
+      '- `r` (Recipes): Array of recipes with keys `{ name, category, items, packaging, marginPct, effortPct, description, img, updatedAt }`.\n' +
+      '  - Each item in a recipe has: `{ name, price, total, base, used }`.\n' +
+      '- `c` (Categories): Array of strings representing recipe categories.\n\n' +
 
-  const requestBody = {
-    system_instruction: {
-      parts: [
-        { text: systemInstructionText }
-      ]
-    },
-    contents: [
-      {
-        parts: [
-          { text: userPrompt }
-        ]
-      }
-    ]
-  };
+      'YOUR PRIMARY RESPONSIBILITIES:\n' +
+      '1. INSTANT RECIPE & MISSING STOCK GENERATION: Generate the recipe JSON under `r`. If any requested item is NOT present in the stock list, ALWAYS include that missing item inside the `s` array as well.\n' +
+      '2. RECIPE ITEMS INCLUSION RULE: For the recipe\'s \'items\' array, include ONLY the specific ingredients and quantities used in the recipe.\n' +
+      '3. CATEGORY ISOLATION RULE: When generating or updating a recipe, if the \'c\' array is requested, contain ONLY the category of the current recipe.\n' +
+      '4. ALWAYS OUTPUT VALID RAW JSON ONLY when asked to generate or update stock, recipes, or categories.\n' +
+      '5. NEVER wrap JSON in markdown backticks (do NOT use ```json ... ```). Output raw JSON text directly.\n' +
+      '6. COMPACT FORMATTING: Do not place closing braces/brackets (`}`, `]`) on individual separate lines at the end of an object/array. Collapse and inline all closing brackets immediately to the right of the final field (e.g., `"used": 150}}]}`).\n\n' +
 
+      'CASUAL / AMBIGUOUS INPUT HANDLING:\n' +
+      'If the user sends greetings or incomplete details, respond in English asking: "What would you like to manage? Item, Recipe, or Category? Please provide the details."'
+  }]
+};
+
+// Hardcoded replies for quick response (English only)
+const QUICK_REPLIES = {
+  greetings: {
+    patterns: /^(hi|hello|hey|salam|namaste)\b/i,
+    reply: () => 'Hello! I am your ASH COSTING assistant. What item, recipe, or category would you like to manage today?'
+  },
+  thanks: {
+    patterns: /^(thanks|thank you|ok|okay|shukran)\s*\.?\s*$/i,
+    reply: () => 'You are welcome! Please let me know if you need help with your bakery inventory or recipes.'
+  }
+};
+
+async function handleTTS(req, res, apiKey) {
+  const { text, voice } = req.body || {};
+  if (!text) {
+    res.status(400).json({ error: { message: 'Missing "text" for TTS' } });
+    return;
+  }
+
+  const voiceName = voice || 'Ursa';
+  const ttsUrl = `https://generativelanguage.googleapis.com/v1/models/${TTS_MODEL}:generateContent?key=${apiKey}`;
+
+  let ttsResponse;
   try {
-    const response = await fetch(url, {
+    ttsResponse = await fetch(ttsUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(requestBody)
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text }] }],
+        generationConfig: {
+          responseModalities: ['AUDIO'],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName }
+            }
+          }
+        }
+      })
     });
+  } catch (err) {
+    res.status(502).json({ error: { message: 'Failed to reach Gemini TTS API', detail: err.message } });
+    return;
+  }
 
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error?.message || 'Gemini API call failed');
+  if (!ttsResponse.ok) {
+    let detail = null;
+    try { detail = await ttsResponse.json(); } catch (_) {}
+    res.status(ttsResponse.status).json({
+      error: { message: detail?.error?.message || `Gemini TTS error: ${ttsResponse.status}` }
+    });
+    return;
+  }
+
+  let data;
+  try {
+    data = await ttsResponse.json();
+  } catch (err) {
+    res.status(502).json({ error: { message: 'Invalid TTS response from Gemini' } });
+    return;
+  }
+
+  const audioPart = data?.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+  const audioBase64 = audioPart?.inlineData?.data;
+  const mimeType = audioPart?.inlineData?.mimeType || 'audio/L16;rate=24000';
+
+  if (!audioBase64) {
+    res.status(502).json({ error: { message: 'No audio returned from Gemini TTS' } });
+    return;
+  }
+
+  res.status(200).json({ audioBase64, mimeType });
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: { message: 'Method not allowed' } });
+    return;
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    res.status(500).json({ error: { message: 'Server misconfigured: GEMINI_API_KEY missing' } });
+    return;
+  }
+
+  if (req.body && req.body.action === 'tts') {
+    await handleTTS(req, res, apiKey);
+    return;
+  }
+
+  const { contents } = req.body || {};
+  if (!contents) {
+    res.status(400).json({ error: { message: 'Missing "contents" in request body' } });
+    return;
+  }
+
+  const lastMsg = contents?.slice(-1)?.[0];
+  const lastText = lastMsg?.parts?.map(p => p.text || '').join(' ').trim() || '';
+  const lastHasImage = !!(lastMsg?.parts || []).find(p => p.inline_data || p.inlineData);
+
+  if (!lastHasImage) {
+    for (const key of Object.keys(QUICK_REPLIES)) {
+      const rule = QUICK_REPLIES[key];
+      if (rule.patterns.test(lastText)) {
+        const replyText = rule.reply();
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        res.setHeader('Connection', 'keep-alive');
+        const chunk = JSON.stringify({ candidates: [{ content: { parts: [{ text: replyText }] } }] });
+        res.write(`data: ${chunk}\n\n`);
+        res.end();
+        return;
+      }
     }
+  }
 
-    return data.candidates[0].content.parts[0].text;
-  } catch (error) {
-    console.error("Gemini API Error:", error);
-    throw error;
+  const upstreamUrl = `https://generativelanguage.googleapis.com/v1/models/${MODEL}:streamGenerateContent?alt=sse&key=${apiKey}`;
+
+  let upstreamResponse;
+  try {
+    upstreamResponse = await fetch(upstreamUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents, systemInstruction: SYSTEM_INSTRUCTION })
+    });
+  } catch (err) {
+    res.status(502).json({ error: { message: 'Failed to reach Gemini API', detail: err.message } });
+    return;
+  }
+
+  if (!upstreamResponse.ok || !upstreamResponse.body) {
+    let detail = null;
+    try { detail = await upstreamResponse.json(); } catch (_) {}
+    res.status(upstreamResponse.status).json({
+      error: { message: detail?.error?.message || `Gemini API error: ${upstreamResponse.status}` }
+    });
+    return;
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+
+  const reader = upstreamResponse.body.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      res.write(value);
+    }
+  } catch (err) {}
+  finally {
+    res.end();
   }
 }
+
+export const config = {
+  api: { bodyParser: { sizeLimit: '8mb' } }
+};
+          
