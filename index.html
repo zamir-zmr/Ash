@@ -859,8 +859,26 @@
       const reader = new FileReader();
       reader.onload = () => {
         const dataUrl = reader.result;
-        const base64 = dataUrl.split(',')[1];
-        resolve({ mimeType: file.type || 'image/jpeg', base64, previewUrl: dataUrl });
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const MAX = 1280;
+            let w = img.naturalWidth, h = img.naturalHeight;
+            const k = Math.min(1, MAX / Math.max(w, h));
+            w = Math.max(1, Math.round(w * k)); h = Math.max(1, Math.round(h * k));
+            const c = document.createElement('canvas'); c.width = w; c.height = h;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+            ctx.drawImage(img, 0, 0, w, h);
+            const out = c.toDataURL('image/jpeg', 0.8);
+            c.width = c.height = 0;
+            resolve({ mimeType: 'image/jpeg', base64: out.split(',')[1], previewUrl: out });
+          } catch (err) {
+            resolve({ mimeType: file.type || 'image/jpeg', base64: dataUrl.split(',')[1], previewUrl: dataUrl });
+          }
+        };
+        img.onerror = () => resolve({ mimeType: file.type || 'image/jpeg', base64: dataUrl.split(',')[1], previewUrl: dataUrl });
+        img.src = dataUrl;
       };
       reader.onerror = reject;
       reader.readAsDataURL(file);
@@ -1878,211 +1896,141 @@
 </script>
 <script>
 /* =========================================================================
-   ZCam — in-page camera (vanilla JS, no libraries)
-   1. getUserMedia se live rear camera (facingMode: environment), flip button se front (user)
-   2. Agar getUserMedia block ho (http/file://, permission denied, WebView limit)
-      -> overlay me "Phone Camera App" button aata hai jo <input capture> ko
-      fresh tap (user gesture) se .click() karta hai
-   3. Capture -> canvas -> DataURL (Base64) -> callback(dataUrl)
-   4. Har exit path par stream.getTracks().forEach(t => t.stop())
+   ZCam — Zamir AI camera system (same to same)
+   Camera button -> native phone camera -> photo -> thumbnail above input.
+   1. Kodular APK (top page)  : AppInventor.setWebViewString('OPEN_CAMERA:<ts>')
+   2. Inside Ash Costing iframe: postMessage -> parent -> Kodular native camera
+   3. Normal browser / no bridge: <input capture="environment"> fallback
+   Photo comes back as "IMG:<base64>" (receiveFromApp / receiveNativeImage / receiveNativeChunk)
    ========================================================================= */
 (function () {
     if (window.ZCam) return;
+    var CAM_MAX_SIDE = 800, CAM_QUALITY = 0.7;
+    var onDone = null, busy = false, lastSig = '', pollUntil = 0, pongT = null;
+    var inIframe = false;
+    try { inIframe = window.parent && window.parent !== window; } catch (e) {}
 
-    var stream = null, facing = 'environment', onDone = null, els = null, bridge = false;
-
-    function showApp() { bridge = true; if (els) els.root.querySelector('#zcamApp').style.display = 'block'; }
-
-    // Kodular native Camera bridge: top page -> AppInventor.setWebViewString, iframe -> parent.postMessage
-    function requestNative() {
-        say('Kodular camera khul raha hai...');
-        clearTimeout(window.__zcamT);
-        window.__zcamT = setTimeout(function () {
-            if (els && els.root.style.display !== 'none')
-                say('Kodular se jawab nahi aaya. Kodular me WebViewStringChange + Camera blocks banaye hain? Tab tak "📱 Phone Camera" ya "🖼️ Gallery" use karein.');
-        }, 5000);
-        if (window.AppInventor && window.AppInventor.setWebViewString) {
-            window.AppInventor.setWebViewString('ZCAM_OPEN:' + facing);
-        } else if (window.parent && window.parent !== window) {
-            window.parent.postMessage({ zcam: 'open', facing: facing }, '*');
-        }
+    function hasBridge() { return !!(window.AppInventor && typeof window.AppInventor.setWebViewString === 'function'); }
+    function fallbackInput() {
+        var inp = document.getElementById('camera-input');
+        try { inp.value = ''; } catch (e) {}
+        inp.click();
     }
+    function armPoll() { pollUntil = Date.now() + 90000; }
 
-    function build() {
-        if (els) return els;
-        var root = document.createElement('div');
-        root.id = 'zcamOverlay';
-        root.style.cssText = 'display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:#000;z-index:2147483000;flex-direction:column;';
-        root.innerHTML =
-            '<video id="zcamVideo" playsinline muted autoplay style="flex:1;min-height:0;width:100%;object-fit:cover;background:#000;visibility:hidden;"></video>' +
-            '<div id="zcamMsg" style="display:none;position:absolute;top:38%;left:16px;right:16px;color:#fff;background:rgba(30,41,59,.95);padding:12px 14px;border-radius:12px;font:600 14px/1.4 sans-serif;text-align:center;"></div>' +
-            '<div style="position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;padding:calc(12px + env(safe-area-inset-top,0px)) 14px 12px;">' +
-                '<button type="button" id="zcamClose" style="background:rgba(0,0,0,.55);color:#fff;border:none;border-radius:20px;padding:10px 16px;font:700 14px sans-serif;">✕ Close</button>' +
-                '<button type="button" id="zcamFlip" style="background:rgba(0,0,0,.55);color:#fff;border:none;border-radius:20px;padding:10px 16px;font:700 14px sans-serif;">🔄 Front / Rear</button>' +
-            '</div>' +
-            '<div style="position:absolute;bottom:0;left:0;right:0;display:flex;align-items:center;justify-content:space-around;padding:16px 14px calc(20px + env(safe-area-inset-bottom,0px));background:linear-gradient(transparent,rgba(0,0,0,.65));">' +
-                '<button type="button" id="zcamApp" style="display:none;background:#16a34a;color:#fff;border:none;border-radius:14px;padding:12px 12px;font:700 12px sans-serif;">📲 App Camera</button>' +
-                '<button type="button" id="zcamNative" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:14px;padding:12px 12px;font:700 12px sans-serif;">📱 Phone Camera</button>' +
-                '<button type="button" id="zcamShot" aria-label="Capture" style="width:70px;height:70px;border-radius:50%;background:#fff;border:5px solid rgba(255,255,255,.45);"></button>' +
-                '<button type="button" id="zcamGallery" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:14px;padding:12px 12px;font:700 12px sans-serif;">🖼️ Gallery</button>' +
-            '</div>';
-        document.body.appendChild(root);
-
-        function mkInput(capture) {
-            var i = document.createElement('input');
-            i.type = 'file'; i.accept = 'image/*';
-            if (capture) i.setAttribute('capture', capture);
-            i.style.display = 'none';
-            i.addEventListener('change', function () { readFile(i); });
-            document.body.appendChild(i);
-            return i;
-        }
-
-        els = {
-            root: root,
-            video: root.querySelector('#zcamVideo'),
-            msg: root.querySelector('#zcamMsg'),
-            inRear: mkInput('environment'),
-            inFront: mkInput('user'),
-            inGallery: mkInput(null)   // sirf secondary "Gallery" button ke liye
-        };
-
-        root.querySelector('#zcamClose').onclick = close;
-        root.querySelector('#zcamShot').onclick = snap;
-        root.querySelector('#zcamFlip').onclick = function () {
-            facing = (facing === 'environment') ? 'user' : 'environment';
-            start();
-        };
-        root.querySelector('#zcamNative').onclick = function () {
-            var inp = facing === 'user' ? els.inFront : els.inRear;
-            inp.click();
-        };
-        root.querySelector('#zcamGallery').onclick = function () { els.inGallery.click(); };
-        root.querySelector('#zcamApp').onclick = requestNative;
-        if (window.AppInventor || bridge) showApp();
-        else if (window.parent && window.parent !== window) { try { window.parent.postMessage({ zcam: 'ping' }, '*'); } catch (e) {} }
-        return els;
-    }
-
-    function stop() {
-        if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
-        if (els && els.video) { try { els.video.pause(); } catch (e) {} els.video.srcObject = null; }
-    }
-
-    function say(text) {
-        els.msg.style.display = text ? 'block' : 'none';
-        els.msg.textContent = text || '';
-        var nb = els.root.querySelector('#zcamNative');
-        var shot = els.root.querySelector('#zcamShot');
-        if (text) {            // live camera nahi -> native camera primary
-            els.video.style.visibility = 'hidden';
-            nb.style.background = '#2563eb'; nb.style.fontSize = '15px'; nb.style.padding = '16px 20px';
-            shot.style.display = 'none';
-        } else {
-            nb.style.background = 'rgba(255,255,255,.18)'; nb.style.fontSize = '12px'; nb.style.padding = '12px 12px';
-            shot.style.display = 'block';
-        }
-    }
-
-    function close() {
-        stop();
-        if (els) { say(''); els.root.style.display = 'none'; }
-    }
-
-    function finish(dataUrl) {
-        clearTimeout(window.__zcamT);
-        var cb = onDone;
-        close();
-        if (cb && dataUrl) cb(dataUrl);
-    }
-
-    function readFile(input) {
-        var f = input.files && input.files[0];
-        if (!f) return;
-        var r = new FileReader();
-        r.onload = function () { finish(r.result); };   // DataURL / Base64
-        r.readAsDataURL(f);
-        input.value = '';
-    }
-
-    function snap() {
-        var v = els.video;
-        if (!stream || !v.videoWidth) return;
-        var max = 1600, w = v.videoWidth, h = v.videoHeight;
-        if (Math.max(w, h) > max) { var k = max / Math.max(w, h); w = Math.round(w * k); h = Math.round(h * k); }
-        var c = document.createElement('canvas');
-        c.width = w; c.height = h;
-        var ctx = c.getContext('2d');
-        if (facing === 'user') { ctx.translate(w, 0); ctx.scale(-1, 1); } // selfie mirror natural lage
-        ctx.drawImage(v, 0, 0, w, h);
-        finish(c.toDataURL('image/jpeg', 0.85));
-    }
-
-    async function start() {
-        stop();
-        say('');
-        els.video.style.transform = (facing === 'user') ? 'scaleX(-1)' : 'none';
-        var md = navigator.mediaDevices;
-        if (!window.isSecureContext || !md || !md.getUserMedia) {
-            say('Live camera is mode me available nahi (HTTPS chahiye). "📱 Phone Camera" dabayein.');
-            return;
-        }
-        try {
-            stream = await md.getUserMedia({ video: { facingMode: { ideal: facing } }, audio: false });
-            els.video.srcObject = stream;
-            await els.video.play();
-            els.video.style.visibility = 'visible';
-        } catch (e) {
-            stop();
-            var n = e && e.name;
-            say((n === 'NotAllowedError' || n === 'SecurityError'
-                ? 'Is app me live camera allowed nahi hai. Neeche camera button dabayein.'
-                : 'Live camera start nahi hua. Neeche camera button dabayein.') + ' [' + (n || 'error') + ']');
-        }
-    }
-
-    // public: ZCam.open('environment' | 'user', function(dataUrl){ ... })
-    function open(which, cb) {
-        build();
-        facing = (which === 'user') ? 'user' : 'environment';
-        onDone = cb;
-        els.root.style.display = 'flex';
-        start();
-    }
-
-    // Tab hide / app background hote hi camera band (light off)
-    document.addEventListener('visibilitychange', function () { if (document.hidden) stop(); });
-    window.addEventListener('pagehide', stop);
-
-    // Kodular se aaya text: plain base64 ho ya data: URL, dono chalega. Badi photo ko canvas se 1600px JPEG me chhota karta hai.
-    window.ZCamReceive = function (raw) {
-        try {
-            var d = String(raw || '').replace(/\s+/g, '');
-            if (!d) return;
-            if (d.indexOf('data:') !== 0) {
-                var mime = d.charAt(0) === '/' ? 'image/jpeg' : (d.indexOf('iVBOR') === 0 ? 'image/png' : 'image/jpeg');
-                d = 'data:' + mime + ';base64,' + d;
-            }
+    function compress(raw, mime) {
+        return new Promise(function (resolve, reject) {
             var img = new Image();
             img.onload = function () {
-                var max = 1600, w = img.naturalWidth, h = img.naturalHeight;
-                if (Math.max(w, h) > max) { var k = max / Math.max(w, h); w = Math.round(w * k); h = Math.round(h * k); }
-                var c = document.createElement('canvas'); c.width = w; c.height = h;
-                c.getContext('2d').drawImage(img, 0, 0, w, h);
-                finish(c.toDataURL('image/jpeg', 0.85));
+                try {
+                    var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+                    if (!w || !h) throw new Error('empty image');
+                    var k = Math.min(1, CAM_MAX_SIDE / Math.max(w, h));
+                    w = Math.max(1, Math.round(w * k)); h = Math.max(1, Math.round(h * k));
+                    var c = document.createElement('canvas'); c.width = w; c.height = h;
+                    var ctx = c.getContext('2d');
+                    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+                    ctx.drawImage(img, 0, 0, w, h);
+                    var out = c.toDataURL('image/jpeg', CAM_QUALITY);
+                    c.width = c.height = 0; img.onload = img.onerror = null; img.src = '';
+                    resolve(out);
+                } catch (e) { reject(e); }
             };
-            img.onerror = function () { say('Kodular se aayi photo padhi nahi ja saki (base64 check karein).'); };
-            img.src = d;
-        } catch (e) { say('Photo process error: ' + e.message); }
-    };   // Kodular: javascript:ZCamReceive('data:image/jpeg;base64,...')
+            img.onerror = function () { reject(new Error('image decode failed')); };
+            img.src = 'data:' + mime + ';base64,' + raw;
+        });
+    }
+
+    async function receiveNativeImageAsync(arg1, arg2) {
+        if (busy) return;
+        busy = true;
+        try {
+            var raw = String(arg1 || ''), mime = arg2 ? String(arg2) : '';
+            var m = raw.match(/^data:([^;,]+)[^,]*,/);
+            if (m) { if (!mime) mime = m[1]; raw = raw.slice(m[0].length); }
+            raw = raw.replace(/[\r\n\s]/g, '').replace(/-/g, '+').replace(/_/g, '/');
+            if (!raw) return;
+            if (raw.indexOf('iVBOR') === 0) mime = 'image/png';
+            else if (raw.indexOf('/9j/') === 0) mime = 'image/jpeg';
+            if (!mime) mime = 'image/jpeg';
+            while (raw.length % 4) raw += '=';
+            var dataUrl = await compress(raw, mime);
+            raw = null;
+            var cb = onDone;
+            if (cb) cb(dataUrl);
+        } catch (err) { console.error('receiveNativeImage failed:', err); }
+        finally { busy = false; }
+    }
+    // must return undefined (javascript: URL returning a value blanks the page)
+    window.receiveNativeImage = function (a, b) { receiveNativeImageAsync(a, b); };
+    window.ZCamReceive = window.receiveNativeImage;
+
+    window.__camChunks = [];
+    window.receiveNativeChunk = function (index, total, piece) {
+        try {
+            index = Number(index); total = Number(total);
+            if (index === 0) window.__camChunks = [];
+            window.__camChunks[index] = String(piece || '');
+            var have = 0;
+            for (var i = 0; i < total; i++) if (window.__camChunks[i] !== undefined) have++;
+            if (have === total) { var all = window.__camChunks.join(''); window.__camChunks = []; window.receiveNativeImage(all, ''); }
+        } catch (e) { console.error('receiveNativeChunk failed:', e); }
+    };
+
+    function readAppString(arg) {
+        try {
+            if (typeof arg === 'string' && arg) return arg;
+            if (window.AppInventor && typeof window.AppInventor.getWebViewString === 'function')
+                return String(window.AppInventor.getWebViewString() || '');
+        } catch (e) {}
+        return '';
+    }
+    function handleAppString(str) {
+        if (!str || str.indexOf('IMG:') !== 0) return false;
+        var sig = str.length + ':' + str.slice(0, 40) + ':' + str.slice(-40);
+        if (sig === lastSig) return false;
+        lastSig = sig; pollUntil = 0;
+        window.receiveNativeImage(str.slice(4).trim(), '');
+        return true;
+    }
+    window.receiveFromApp = function (arg) { try { handleAppString(readAppString(arg)); } catch (e) {} };
+    setInterval(function () {
+        if (Date.now() > pollUntil) return;
+        try { handleAppString(readAppString()); } catch (e) {}
+    }, 1000);
+
+    function openNative() {
+        window.AppInventor.setWebViewString('OPEN_CAMERA:' + Date.now());
+        armPoll();
+    }
+
+    // public: ZCam.open('environment', function(dataUrl){ ... })
+    function open(which, cb) {
+        onDone = cb;
+        try {
+            if (hasBridge()) { openNative(); return; }
+        } catch (e) { console.error('Kodular bridge failed:', e); }
+        if (inIframe) {
+            clearTimeout(pongT);
+            pongT = setTimeout(fallbackInput, 500);          // parent has no bridge -> browser camera
+            try { window.parent.postMessage({ zcam: 'ping', want: 'open' }, '*'); }
+            catch (e) { clearTimeout(pongT); fallbackInput(); }
+            return;
+        }
+        fallbackInput();
+    }
+
     window.addEventListener('message', function (e) {
         var d = e.data;
         if (!d || !d.zcam) return;
-        if (d.zcam === 'pong') showApp();
-        if (d.zcam === 'result' && d.dataUrl) finish(d.dataUrl);
+        if (d.zcam === 'pong') {
+            clearTimeout(pongT);
+            try { window.parent.postMessage({ zcam: 'open', cmd: 'OPEN_CAMERA' }, '*'); } catch (err) { fallbackInput(); }
+        }
+        if (d.zcam === 'result' && d.dataUrl) window.receiveNativeImage(d.dataUrl, '');
     });
 
-    window.ZCam = { open: open, close: close };
+    window.ZCam = { open: open, close: function () {} };
 })();
 </script>
 
