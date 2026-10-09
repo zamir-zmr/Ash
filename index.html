@@ -845,6 +845,13 @@
         <button type="button" class="remove-thumb" data-i="${i}" title="Remove">&times;</button>
       </div>
     `).join('');
+    pendingAttachmentsBar.querySelectorAll('.pending-thumb img').forEach((im, i) => {
+      const att = pendingAttachments[i];
+      im.addEventListener('error', () => {
+        const k = pendingAttachments.indexOf(att);
+        if (k > -1) { pendingAttachments.splice(k, 1); renderPendingAttachments(); }
+      });
+    });
     pendingAttachmentsBar.querySelectorAll('.remove-thumb').forEach(btn => {
       btn.addEventListener('click', () => {
         const idx = parseInt(btn.dataset.i, 10);
@@ -885,10 +892,15 @@
     });
   }
 
+  const __seenFiles = new Map();
   async function handleFileSelect(e){
     const files = Array.from(e.target.files || []);
     for (const file of files){
       if (!file.type.startsWith('image/')) continue;
+      const fkey = file.name + '|' + file.size + '|' + file.lastModified;
+      const nowT = Date.now();
+      if (__seenFiles.has(fkey) && nowT - __seenFiles.get(fkey) < 4000) continue;   // duplicate change event
+      __seenFiles.set(fkey, nowT);
       try {
         const att = await readFileAsBase64(file);
         pendingAttachments.push(att);
@@ -1956,7 +1968,7 @@
             while (raw.length % 4) raw += '=';
             var dataUrl = await compress(raw, mime);
             raw = null;
-            var cb = onDone;
+            var cb = onDone; onDone = null;   // ek camera click par sirf ek photo
             if (cb) cb(dataUrl);
         } catch (err) { console.error('receiveNativeImage failed:', err); }
         finally { busy = false; }
