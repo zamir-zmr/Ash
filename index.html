@@ -2000,7 +2000,7 @@
     }, 1000);
 
     function openNative() {
-        window.AppInventor.setWebViewString('OPEN_CAMERA:' + Date.now());
+        window.AppInventor.setWebViewString('OPEN_CAMERA OPEN CAMERA:' + Date.now());
         armPoll();
     }
 
@@ -2012,7 +2012,7 @@
         } catch (e) { console.error('Kodular bridge failed:', e); }
         if (inIframe) {
             clearTimeout(pongT);
-            pongT = setTimeout(fallbackInput, 500);          // parent has no bridge -> browser camera
+            pongT = setTimeout(fallbackInput, 1500);          // parent has no bridge -> browser camera
             try { window.parent.postMessage({ zcam: 'ping', want: 'open' }, '*'); }
             catch (e) { clearTimeout(pongT); fallbackInput(); }
             return;
